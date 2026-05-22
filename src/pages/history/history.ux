@@ -1,0 +1,79 @@
+<!--
+  历史页：今日饮水记录列表（最新在上）。
+  用 for 渲染；空状态用三元文字（避开 if）。数据来自 store.getToday()。
+-->
+<template>
+  <div class="page">
+    <text class="head-total">今日 {{ totalMl }} ml</text>
+    <text class="head-sub">共 {{ count }} 次</text>
+
+    <text class="empty">{{ count === 0 ? '今天还没有记录' : '' }}</text>
+
+    <div class="entry" for="{{ rows }}">
+      <text class="entry-time">{{ $item.time }}</text>
+      <text class="entry-ml">+{{ $item.ml }} ml</text>
+    </div>
+
+    <text class="b" onclick="goBack">返回</text>
+  </div>
+</template>
+
+<style>
+.page {
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  width: 480px;
+  height: 480px;
+  background-color: #000000;
+}
+.head-total { font-size: 38px; color: #4FC3F7; font-weight: bold; }
+.head-sub { font-size: 22px; color: #888888; margin-top: 2px; margin-bottom: 8px; }
+.empty { font-size: 26px; color: #666666; }
+.entry { flex-direction: row; align-items: center; justify-content: center; margin-top: 8px; }
+.entry-time { font-size: 28px; color: #DDDDDD; width: 130px; text-align: center; }
+.entry-ml { font-size: 28px; color: #4FC3F7; width: 130px; text-align: center; }
+.b { font-size: 28px; color: #81D4FA; margin-top: 20px; padding-top: 10px; padding-bottom: 10px; padding-left: 24px; padding-right: 24px; }
+</style>
+
+<script>
+/**
+ * 历史页脚本。
+ * onShow 读取今日记录，倒序生成 rows=[{time:'HH:MM', ml}]，最多取最近 8 条避免圆屏溢出。
+ */
+import router from '@system.router'
+import { getToday } from '../../common/util/store.js'
+
+export default {
+  private: {
+    totalMl: 0,
+    count: 0,
+    rows: []
+  },
+
+  onShow() {
+    getToday().then((today) => {
+      this.totalMl = today.totalMl
+      var entries = today.entries || []
+      this.count = entries.length
+      var rows = []
+      for (var i = entries.length - 1; i >= 0 && rows.length < 8; i--) {
+        rows.push({ time: formatTime(entries[i].t), ml: entries[i].ml })
+      }
+      this.rows = rows
+    })
+  },
+
+  goBack() {
+    router.back()
+  }
+}
+
+/** 时间戳 → 'HH:MM'。 */
+function formatTime(t) {
+  var d = new Date(t)
+  var hh = d.getHours()
+  var mm = d.getMinutes()
+  return (hh < 10 ? '0' : '') + hh + ':' + (mm < 10 ? '0' : '') + mm
+}
+</script>

@@ -1,0 +1,13 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(xargs grep *)",
+      "Bash(rm -rf dist .temp*)",
+      "Bash(NODE_OPTIONS=--openssl-legacy-provider node_modules/.bin/aiot release --enable-jsc --complete-feature)"
+    ],
+    "additionalDirectories": [
+      "C:\\Users\\Peter\\Desktop",
+      "e:\\WorkSpace\\WaterReminderWatch\\dist"
+    ]
+  }
+}

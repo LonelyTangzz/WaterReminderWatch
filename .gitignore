@@ -1,0 +1,30 @@
+# 依赖
+node_modules/
+
+# 构建产物
+dist/
+build/
+.quickapp.deps.json
+
+# aiot 临时构建目录
+.temp_*/
+
+# hap 缓存
+.cache/
+.hap/
+
+# 私有签名（任何机器都应本地生成，不随代码走）
+sign/**/private.pem
+sign/**/certificate.pem
+
+# IDE
+.idea/
+.vscode/
+*.iml
+
+# Windows
+Thumbs.db
+
+# 开发参考样本（不随代码走）
+_reference_ebook/
+_verify_rpk/

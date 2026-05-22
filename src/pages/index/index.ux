@@ -1,0 +1,158 @@
+<!--
+  喝水提醒主页（Xiaomi Watch S4 圆表，466 圆屏，designWidth 480）。
+  - 顶部：当前饮水量 / 目标 / 完成百分比
+  - 中部：三档快捷加水 150 / 250 / 500
+  - 底部：历史 · 设置 导航
+  提醒：onShow 按设置启动前台定时器（仅 app 打开时有效，平台不开放后台）。
+-->
+<template>
+  <div class="page">
+    <div class="hero">
+      <text class="amount">{{ totalMl }}</text>
+      <text class="unit">/ {{ goalMl }}ml · {{ percent }}%</text>
+    </div>
+
+    <div class="cup-row">
+      <div class="cup cup-s" onclick="addSmall"><text class="cup-label">150</text></div>
+      <div class="cup cup-m" onclick="addMedium"><text class="cup-label">250</text></div>
+      <div class="cup cup-l" onclick="addLarge"><text class="cup-label">500</text></div>
+    </div>
+
+    <div class="nav-row">
+      <text class="nav-link" onclick="openHistory">历史</text>
+      <text class="nav-dot">·</text>
+      <text class="nav-link" onclick="openSettings">设置</text>
+    </div>
+  </div>
+</template>
+
+<style>
+.page {
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  width: 480px;
+  height: 480px;
+  background-color: #000000;
+}
+
+.hero {
+  flex-direction: column;
+  align-items: center;
+  margin-bottom: 24px;
+}
+
+.amount {
+  font-size: 110px;
+  color: #4FC3F7;
+  font-weight: bold;
+}
+
+.unit {
+  font-size: 30px;
+  color: #AAAAAA;
+  margin-top: 4px;
+}
+
+.cup-row {
+  flex-direction: row;
+  justify-content: center;
+}
+
+.cup {
+  width: 116px;
+  height: 80px;
+  margin-left: 8px;
+  margin-right: 8px;
+  border-radius: 40px;
+  justify-content: center;
+  align-items: center;
+}
+
+.cup-s { background-color: #4FC3F7; }
+.cup-m { background-color: #0288D1; }
+.cup-l { background-color: #01579B; }
+
+.cup-label {
+  color: #FFFFFF;
+  font-size: 36px;
+  font-weight: bold;
+}
+
+.nav-row {
+  flex-direction: row;
+  align-items: center;
+  margin-top: 32px;
+}
+
+.nav-link {
+  color: #81D4FA;
+  font-size: 30px;
+  padding-left: 20px;
+  padding-right: 20px;
+}
+
+.nav-dot {
+  color: #555555;
+  font-size: 30px;
+}
+</style>
+
+<script>
+/**
+ * 主页脚本。
+ * 数据来自 common/util/store.js（settings + today）。
+ * onShow 刷新界面并按设置启动前台提醒；onHide 停止提醒定时器。
+ */
+import router from '@system.router'
+import prompt from '@system.prompt'
+import { getSettings, getToday, addIntake } from '../../common/util/store.js'
+
+export default {
+  private: {
+    totalMl: 0,
+    goalMl: 2000,
+    percent: 0
+  },
+
+  onShow() {
+    // 提醒定时器统一由 app.ux 管理（后台验证期），页面只刷新 UI。
+    this.refresh()
+  },
+
+  /** 从存储拉取 settings + today，刷新 hero 区。 */
+  refresh() {
+    return Promise.all([getSettings(), getToday()]).then((arr) => {
+      var settings = arr[0]
+      var today = arr[1]
+      this.goalMl = settings.goalMl
+      this.totalMl = today.totalMl
+      this.percent = this.goalMl > 0
+        ? Math.min(100, Math.round(100 * this.totalMl / this.goalMl))
+        : 0
+    })
+  },
+
+  addSmall() { this._add(150) },
+  addMedium() { this._add(250) },
+  addLarge() { this._add(500) },
+
+  _add(ml) {
+    addIntake(ml).then(() => {
+      this.refresh()
+      prompt.showToast({ message: '+' + ml + ' ml', duration: 0 })
+    }).catch((err) => {
+      console.error('[index] addIntake fail', err)
+      prompt.showToast({ message: '保存失败', duration: 0 })
+    })
+  },
+
+  openHistory() {
+    router.push({ uri: '/pages/history' })
+  },
+
+  openSettings() {
+    router.push({ uri: '/pages/settings' })
+  }
+}
+</script>

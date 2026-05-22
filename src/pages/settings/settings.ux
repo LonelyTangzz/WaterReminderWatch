@@ -1,0 +1,128 @@
+<!--
+  设置页：每日目标 / 提醒间隔 / 提醒开关 / 清空今日。
+  Vela 对相邻 if 指令渲染异常，这里一律用三元表达式绑定，避免 if/for。
+-->
+<template>
+  <div class="page">
+    <text class="title">设置</text>
+
+    <div class="row">
+      <text class="label">目标</text>
+      <text class="step-btn" onclick="goalDown">−</text>
+      <text class="step-val">{{ goalMl }}</text>
+      <text class="step-btn" onclick="goalUp">+</text>
+    </div>
+
+    <div class="row">
+      <text class="label">间隔</text>
+      <text class="step-btn" onclick="intvDown">−</text>
+      <text class="step-val">{{ intervalMinutes }}</text>
+      <text class="step-btn" onclick="intvUp">+</text>
+    </div>
+
+    <div class="row">
+      <text class="label">提醒</text>
+      <text class="toggle" onclick="toggleReminder">{{ reminderEnabled ? '已开启' : '已关闭' }}</text>
+    </div>
+
+    <text class="sleep">睡眠 22:00–08:00 不提醒</text>
+
+    <div class="foot">
+      <text class="danger-btn" onclick="clearToday">清空今日</text>
+      <text class="b" onclick="goBack">返回</text>
+    </div>
+  </div>
+</template>
+
+<style>
+.page {
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  width: 480px;
+  height: 480px;
+  background-color: #000000;
+}
+.title { font-size: 32px; color: #FFFFFF; margin-bottom: 10px; }
+.row { flex-direction: row; align-items: center; justify-content: center; margin-top: 12px; }
+.label { font-size: 26px; color: #AAAAAA; width: 84px; }
+.step-btn {
+  width: 56px; height: 56px; border-radius: 28px;
+  background-color: #0288D1; color: #FFFFFF; font-size: 36px; text-align: center;
+  margin-left: 10px; margin-right: 10px;
+}
+.step-val { width: 116px; font-size: 34px; color: #4FC3F7; text-align: center; font-weight: bold; }
+.toggle {
+  font-size: 28px; color: #FFFFFF; background-color: #0288D1;
+  border-radius: 26px; padding-top: 8px; padding-bottom: 8px; padding-left: 30px; padding-right: 30px;
+}
+.sleep { font-size: 22px; color: #666666; margin-top: 14px; }
+.foot { flex-direction: row; align-items: center; justify-content: center; margin-top: 18px; }
+.danger-btn {
+  font-size: 24px; color: #FF8A80; background-color: #1A1A1A;
+  border-radius: 26px; padding-top: 10px; padding-bottom: 10px; padding-left: 24px; padding-right: 24px;
+  margin-right: 14px;
+}
+.b { font-size: 28px; color: #81D4FA; padding-top: 10px; padding-bottom: 10px; padding-left: 18px; padding-right: 18px; }
+</style>
+
+<script>
+/**
+ * 设置页脚本。
+ * onInit 读取 settings 回显；每次调节即时 setSettings 持久化。
+ * 目标步进 250（500–5000），间隔步进 15（15–240）。
+ */
+import router from '@system.router'
+import prompt from '@system.prompt'
+import { getSettings, setSettings, resetToday } from '../../common/util/store.js'
+
+export default {
+  private: {
+    goalMl: 2000,
+    intervalMinutes: 60,
+    reminderEnabled: true
+  },
+
+  onInit() {
+    getSettings().then((s) => {
+      this.goalMl = s.goalMl
+      this.intervalMinutes = s.intervalMinutes
+      this.reminderEnabled = s.reminderEnabled
+    })
+  },
+
+  save() {
+    return setSettings({
+      goalMl: this.goalMl,
+      intervalMinutes: this.intervalMinutes,
+      reminderEnabled: this.reminderEnabled
+    }).then((saved) => {
+      this.goalMl = saved.goalMl
+      this.intervalMinutes = saved.intervalMinutes
+      this.reminderEnabled = saved.reminderEnabled
+    })
+  },
+
+  goalUp() { this.goalMl = Math.min(5000, this.goalMl + 250); this.save() },
+  goalDown() { this.goalMl = Math.max(500, this.goalMl - 250); this.save() },
+  intvUp() { this.intervalMinutes = Math.min(240, this.intervalMinutes + 15); this.save() },
+  intvDown() { this.intervalMinutes = Math.max(15, this.intervalMinutes - 15); this.save() },
+
+  toggleReminder() {
+    this.reminderEnabled = !this.reminderEnabled
+    this.save().then(() => {
+      prompt.showToast({ message: this.reminderEnabled ? '提醒已开启' : '提醒已关闭', duration: 0 })
+    })
+  },
+
+  clearToday() {
+    resetToday().then(() => {
+      prompt.showToast({ message: '今日记录已清空', duration: 0 })
+    })
+  },
+
+  goBack() {
+    router.back()
+  }
+}
+</script>

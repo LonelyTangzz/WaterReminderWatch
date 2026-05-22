@@ -1,0 +1,32 @@
+<script>
+/**
+ * 应用入口。
+ *
+ * 后台验证版：按官方「后台运行」文档，后台逻辑放在 app.ux（实例常驻，
+ * 不随页面销毁）。onCreate 启动静音音频保活 + 一个 30 秒测试定时器，
+ * 用于验证退到桌面后定时器能否继续执行（绕过睡眠时段，直接震动）。
+ *
+ * 验证通过后，此测试定时器将替换为读 settings 的正式提醒逻辑。
+ */
+import { startKeepAlive, stopKeepAlive, vibrateTimes } from './common/util/reminder.js'
+
+export default {
+  onCreate() {
+    console.log('app created')
+    startKeepAlive()
+    var self = this
+    self._bgTimer = setInterval(function () {
+      vibrateTimes(2)
+    }, 30000)
+  },
+
+  onDestroy() {
+    console.log('app destroyed')
+    if (this._bgTimer) {
+      clearInterval(this._bgTimer)
+      this._bgTimer = null
+    }
+    stopKeepAlive()
+  }
+}
+</script>
