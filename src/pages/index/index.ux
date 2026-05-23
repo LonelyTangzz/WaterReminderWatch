@@ -143,9 +143,16 @@ export default {
   addLarge() { this._add(500) },
 
   _add(ml) {
+    var self = this
     addIntake(ml).then(() => {
-      this.refresh()
+      self.refresh()
       prompt.showToast({ message: '+' + ml + ' ml', duration: 0 })
+      // 喝水后重置提醒倒计时：已手动补水，下次提醒从此刻起算
+      try {
+        if (self.$app && typeof self.$app.resetReminderTimer === 'function') {
+          self.$app.resetReminderTimer()
+        }
+      } catch (e) {}
     }).catch((err) => {
       console.error('[index] addIntake fail', err)
       prompt.showToast({ message: '保存失败', duration: 0 })

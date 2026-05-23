@@ -23,18 +23,27 @@ export default {
   onCreate() {
     console.log('[app] created')
     var self = this
-    self._lastReminderTime = 0
+    self._lastReminderTime = Date.now() // 启动时重置，等完整间隔后才首次提醒
     self._loopRunning = false
     self._loopTimer = null
     self._settings = null
 
     getSettings().then(function (s) {
       self._settings = s
-      console.log('[app] init, enabled=' + s.reminderEnabled)
+      console.log('[app] init, enabled=' + s.reminderEnabled + ', interval=' + s.intervalMinutes)
       if (s.reminderEnabled) self._startLoop()
     }).catch(function (e) {
       console.warn('[app] init fail', e)
     })
+  },
+
+  /**
+   * 公开：喝水后调用，重置提醒倒计时。
+   * 用户手动喝了水，下次自动提醒从此刻起算 intervalMinutes 后。
+   */
+  resetReminderTimer() {
+    this._lastReminderTime = Date.now()
+    console.log('[app] reminder timer reset')
   },
 
   /** 公开：设置页开启提醒时调用。 */
