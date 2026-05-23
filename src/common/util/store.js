@@ -73,28 +73,51 @@ export function todayKey() {
 }
 
 /**
+ * 模块级设置缓存。
+ * 每次 setSettings 写入时同步更新，getSettingsCached 直接返回。
+ * 解决跨组件（settings.ux → app.ux）状态同步问题。
+ */
+var _settingsCache = null
+
+/**
+ * 同步获取缓存的设置（不读存储）。
+ * 初始为 null，首次 getSettings/setSettings 后填充。
+ * @returns {object|null}
+ */
+export function getSettingsCached() {
+  return _settingsCache
+}
+
+/**
  * 读取并规范化用户设置。缺字段自动用默认值补齐，解析失败同样回退到默认。
  * @returns {Promise<{goalMl:number,intervalMinutes:number,reminderEnabled:boolean}>}
  */
 export function getSettings() {
   return getItem(SETTINGS_KEY).then(function (raw) {
-    if (!raw) return shallowCopy(DEFAULT_SETTINGS)
+    if (!raw) {
+      _settingsCache = shallowCopy(DEFAULT_SETTINGS)
+      return _settingsCache
+    }
     try {
       var parsed = JSON.parse(raw)
-      return mergeSettings(parsed)
+      _settingsCache = mergeSettings(parsed)
+      return _settingsCache
     } catch (e) {
-      return shallowCopy(DEFAULT_SETTINGS)
+      _settingsCache = shallowCopy(DEFAULT_SETTINGS)
+      return _settingsCache
     }
   })
 }
 
-/** 覆盖式写入用户设置；返回规范化后的新设置。 */
+/** 覆盖式写入用户设置；返回规范化后的新设置。同步更新缓存。 */
 export function setSettings(settings) {
   var normalized = {
     goalMl: clamp(settings.goalMl, 500, 5000),
     intervalMinutes: clamp(settings.intervalMinutes, 1, 240),
     reminderEnabled: !!settings.reminderEnabled
   }
+  // 立即更新缓存，让 app.ux 同步读到最新值
+  _settingsCache = normalized
   return setItem(SETTINGS_KEY, JSON.stringify(normalized)).then(function () {
     return normalized
   })
