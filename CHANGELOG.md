@@ -1,5 +1,35 @@
 # CHANGELOG
 
+## 2026-05-23 — system.request 后台保活方案 + 手机伴侣兜底
+
+**新后台保活方案（基于 Vela 官方文档）：**
+
+- [feat] **[src/app.ux](src/app.ux)** 重写为后台心跳 + 提醒调度中心：`setInterval` 周期性发起 `system.fetch` 请求，利用请求"进行中"状态维持 `system.request` 后台活跃，搭载提醒检查（间隔判断 + 睡眠免打扰 + 震动）
+- [feat] **[src/manifest.json](src/manifest.json)** 新增 `system.fetch` / `system.request` feature 声明 + `config.background.features: ["system.request"]`
+- [theory] **原理**：Vela 官方「后台运行」文档列出三种后台接口（`system.audio` / `system.request` / `system.geolocation`）。`system.audio` 在 S4 上实测无效（后台仍冻结），但 `system.request`（上传下载）在官方支持矩阵中明确标注 S4 支持。通过周期性 fetch 让 `system.request` 保持"正在使用"状态，阻止系统冻结应用
+- [theory] 心跳 URL 使用 `httpbin.org/delay/3`（延迟 3s 响应），最大化每次请求的"进行中"窗口。若手表无网络，请求快速失败也不影响前台功能
+- [note] **实机效果待验证**：此方案的理论基础是官方文档，但 S4 对第三方快应用的实际后台策略可能仍有额外限制
+
+**手机伴侣（备用兜底方案）：**
+
+- [feat] 新增 **[phone-companion/index.html](phone-companion/index.html)**：独立网页版喝水提醒，在手机浏览器打开即可工作
+  - Web Notification API 系统通知 + 震动
+  - 设置持久化（localStorage）+ 跨天自动重置
+  - 睡眠免打扰 22:00–08:00
+  - 三档快捷加水 + 每日目标/间隔可调
+  - 零依赖，单个 HTML 文件，无需构建
+- [docs] 用法：手机浏览器打开 →「添加到主屏幕」当轻量 PWA 用
+
+**架构调整：**
+
+- [refactor] **[src/pages/index/index.ux](src/pages/index/index.ux)** 移除页面级提醒定时器管理（`startForeground`/`stopForeground`），提醒统一由 `app.ux` 集中调度
+- [refactor] **[src/pages/settings/settings.ux](src/pages/settings/settings.ux)** `save()` 增加 `$app.syncSettings()` 调用，设置变更后即时同步到 app.ux 后台循环
+
+**文档同步：**
+
+- [docs] **[README.md](README.md)** 更新提醒描述（后台心跳方案）、API 支持度表格（新增 fetch/request）、新增「手机伴侣」章节
+- [docs] **[TODO.md](TODO.md)** 新增「后台保活验证」任务项
+
 ## 2026-05-23 — 前台提醒接入 + 清理无效后台代码 + TODO 完善
 
 **核心修复：前台提醒从未被启动（功能缺陷）**

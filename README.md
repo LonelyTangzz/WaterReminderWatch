@@ -5,10 +5,11 @@
 - **主页**：当日饮水量 / 目标 / 百分比，三档快捷加水（150 / 250 / 500ml），导航到历史与设置
 - **设置页**：每日目标（500–5000，步进 250）、提醒间隔（15–240 分钟，步进 15）、提醒开关、清空今日记录
 - **历史页**：今日饮水记录列表（时间 + 水量）
-- **提醒**：前台 `setInterval` + `@system.vibrator` 震动；睡眠时段 22:00–08:00 自动静默
+- **提醒**：`app.ux` 统一管理（后台心跳 + 提醒调度），通过 `system.request`（周期性 fetch）尝试维持后台活跃，搭载震动提醒；睡眠时段 22:00–08:00 自动静默
+- **手机伴侣**：`phone-companion/index.html` —— 独立网页版，在手机浏览器打开即可接收喝水通知（Web Notification API），与手表版形成双保险
 - **每日重置**：跨天后记录自动清零（`store.js` 按日期键判断）
 
-> ⚠️ **后台限制**：小米 Watch S4 的 Vela 不向第三方快应用开放后台常驻 / 定时唤醒，提醒**仅在应用打开（前台）时生效**。详见 [CHANGELOG.md](CHANGELOG.md) 2026-05-22「后台提醒结论」。后台定时提醒需借助手表系统自带闹钟兜底。
+> ⚠️ **后台提醒（2026-05-23 更新）**：改用 Vela 官方支持的 `system.request`（上传下载）作为后台保活接口——`app.ux` 周期性发起 fetch 请求维持后台活跃状态。此方案基于官方文档，但 **S4 实机效果待验证**。若仍被冻结，请使用手机伴侣网页版（`phone-companion/index.html`）作为兜底。详见 [CHANGELOG.md](CHANGELOG.md)。
 
 > **技术栈演进**：本项目历经 Wear OS（Jetpack Compose）→ 通用快应用（hap-toolkit）→ **小米官方 `aiot-toolkit`（Vela JS 应用）**。前两者产物在 S4 上黑屏，根因是工具链错误——Vela 需要 `aiot-toolkit --enable-jsc` 编译出的 QuickJS 字节码（`.jsc`）。完整踩坑记录见 [CHANGELOG.md](CHANGELOG.md)。
 
@@ -46,6 +47,8 @@ WaterReminderWatch/
 │       ├── index/index.ux          主页
 │       ├── settings/settings.ux    设置页
 │       └── history/history.ux      历史页
+├── phone-companion/                手机伴侣网页版（备用方案）
+│   └── index.html                  独立网页，浏览器打开即可接收提醒
 ├── sign/release/                   release 签名（private.pem / certificate.pem，已 gitignore）
 ├── dist/                           构建输出（com.waterreminder.watch.release.1.0.0.rpk + 喝水提醒.bin）
 ├── package.json
@@ -100,8 +103,22 @@ cp "dist/com.waterreminder.watch.release.1.0.0.rpk" "dist/喝水提醒.bin"
 | `system.storage` | settings + today 持久化 | ✅ |
 | `system.prompt` | toast 提示 | ✅ |
 | `system.vibrator` | 震动提醒（**仅 `vibrate({mode})`，无 `start`**） | ✅ |
+| `system.fetch` | 后台心跳请求（保活载体） | ✅ 官方支持矩阵明确列出 |
+| `system.request` | 后台保活声明（上传下载） | ✅ 官方支持矩阵明确列出 |
 | `system.alarm` | 系统闹钟（后台提醒） | ❌ 空壳模块，`setAlarm` 不存在 |
 | `system.audio` 后台保活 | 静音音频常驻 | ❌ 后台仍被冻结（已废弃，不再声明） |
+
+## 六、手机伴侣（备用方案）
+
+若手表后台提醒仍不可用，可在手机浏览器打开 `phone-companion/index.html`：
+
+- 独立网页，无需安装任何 App
+- 使用浏览器 Notification API 发送系统通知
+- 设置（目标/间隔/开关）保存在 localStorage，跨天自动重置
+- 同样支持 22:00–08:00 睡眠免打扰
+- 保持页面打开即可（切到后台时部分浏览器可能暂停定时器，切回自动恢复）
+
+> 推荐用法：手机浏览器打开后「添加到主屏幕」，当作轻量 PWA 使用。
 
 ---
 

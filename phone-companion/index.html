@@ -1,0 +1,307 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black">
+<meta name="theme-color" content="#000000">
+<title>喝水提醒 · 手机伴侣</title>
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+    background: #000;
+    color: #fff;
+    min-height: 100dvh;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    padding: 24px;
+    -webkit-tap-highlight-color: transparent;
+    user-select: none;
+  }
+  .hero { text-align: center; margin-bottom: 28px; }
+  .amount { font-size: 96px; color: #4FC3F7; font-weight: 800; line-height: 1; }
+  .unit  { font-size: 24px; color: #888; margin-top: 6px; }
+  .progress-bar {
+    width: 260px; height: 8px; background: #1a1a1a; border-radius: 4px;
+    margin: 14px auto 0; overflow: hidden;
+  }
+  .progress-fill {
+    height: 100%; background: linear-gradient(90deg, #4FC3F7, #0288D1);
+    border-radius: 4px; transition: width 0.4s ease;
+  }
+
+  .cup-row { display: flex; gap: 12px; justify-content: center; margin-bottom: 28px; }
+  .cup {
+    width: 80px; height: 64px; border-radius: 32px;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 28px; font-weight: 700; color: #fff; cursor: pointer;
+    transition: transform 0.1s, opacity 0.1s;
+  }
+  .cup:active { transform: scale(0.92); opacity: 0.85; }
+  .cup-s { background: #4FC3F7; }
+  .cup-m { background: #0288D1; }
+  .cup-l { background: #01579B; }
+
+  .settings-panel {
+    width: 100%; max-width: 340px;
+    background: #111; border-radius: 20px; padding: 20px 24px;
+  }
+  .row { display: flex; align-items: center; justify-content: space-between; padding: 10px 0; }
+  .row + .row { border-top: 1px solid #1a1a1a; }
+  .label { font-size: 17px; color: #aaa; }
+  .stepper { display: flex; align-items: center; gap: 10px; }
+  .stepper button {
+    width: 38px; height: 38px; border-radius: 19px; border: none;
+    background: #0288D1; color: #fff; font-size: 22px; font-weight: 700;
+    cursor: pointer; display: flex; align-items: center; justify-content: center;
+  }
+  .stepper button:active { opacity: 0.7; }
+  .stepper .val { font-size: 20px; color: #4FC3F7; font-weight: 700; min-width: 54px; text-align: center; }
+
+  .toggle-btn {
+    padding: 8px 22px; border-radius: 20px; border: none;
+    font-size: 16px; font-weight: 600; cursor: pointer;
+    transition: background 0.2s;
+  }
+  .toggle-on  { background: #0288D1; color: #fff; }
+  .toggle-off { background: #333; color: #888; }
+
+  .tip {
+    font-size: 13px; color: #555; margin-top: 14px;
+    text-align: center; line-height: 1.6;
+  }
+  .tip a { color: #4FC3F7; }
+
+  .toast {
+    position: fixed; top: 20px; left: 50%; transform: translateX(-50%);
+    background: #333; color: #fff; padding: 12px 28px; border-radius: 24px;
+    font-size: 16px; font-weight: 600; z-index: 999;
+    opacity: 0; transition: opacity 0.3s;
+    pointer-events: none;
+  }
+  .toast.show { opacity: 1; }
+
+  .footer {
+    margin-top: 20px; font-size: 12px; color: #444;
+    display: flex; gap: 16px;
+  }
+  .footer a { color: #555; text-decoration: none; }
+</style>
+</head>
+<body>
+
+<div class="hero">
+  <div class="amount" id="amount">0</div>
+  <div class="unit"><span id="goalDisplay">2000</span> ml · <span id="percent">0</span>%</div>
+  <div class="progress-bar"><div class="progress-fill" id="progressFill" style="width:0%"></div></div>
+</div>
+
+<div class="cup-row">
+  <div class="cup cup-s" onclick="addWater(150)">150</div>
+  <div class="cup cup-m" onclick="addWater(250)">250</div>
+  <div class="cup cup-l" onclick="addWater(500)">500</div>
+</div>
+
+<div class="settings-panel">
+  <div class="row">
+    <span class="label">每日目标</span>
+    <div class="stepper">
+      <button onclick="adjustGoal(-250)">−</button>
+      <span class="val" id="goalVal">2000</span>
+      <button onclick="adjustGoal(250)">+</button>
+    </div>
+  </div>
+  <div class="row">
+    <span class="label">提醒间隔</span>
+    <div class="stepper">
+      <button onclick="adjustInterval(-15)">−</button>
+      <span class="val" id="intvVal">60</span>
+      <button onclick="adjustInterval(15)">+</button>
+    </div>
+  </div>
+  <div class="row">
+    <span class="label">提醒开关</span>
+    <button class="toggle-btn toggle-on" id="toggleBtn" onclick="toggleReminder()">已开启</button>
+  </div>
+  <div class="tip">
+    💤 睡眠免打扰 22:00 – 08:00<br>
+    📱 保持此页面打开即可接收提醒
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<div class="footer">
+  <a href="javascript:resetToday()">清空今日</a>
+</div>
+
+<script>
+// ── 状态存储 ──
+var STORAGE_KEY = 'wr_phone_v1'
+var state = loadState()
+
+function defaultState() {
+  return {
+    goalMl: 2000,
+    intervalMinutes: 60,
+    reminderEnabled: true,
+    today: { dateKey: todayKey(), totalMl: 0, entries: [] },
+    lastReminder: 0
+  }
+}
+
+function loadState() {
+  try {
+    var raw = localStorage.getItem(STORAGE_KEY)
+    if (raw) {
+      var s = JSON.parse(raw)
+      // 跨天重置
+      if (s.today && s.today.dateKey !== todayKey()) {
+        s.today = { dateKey: todayKey(), totalMl: 0, entries: [] }
+      }
+      // 合并缺省字段
+      var d = defaultState()
+      for (var k in d) { if (!(k in s)) s[k] = d[k] }
+      return s
+    }
+  } catch (e) {}
+  return defaultState()
+}
+
+function saveState() { localStorage.setItem(STORAGE_KEY, JSON.stringify(state)) }
+function todayKey() { var d = new Date(); return d.getFullYear()+'-'+(d.getMonth()+1)+'-'+d.getDate() }
+
+// ── UI 刷新 ──
+function render() {
+  document.getElementById('amount').textContent = state.today.totalMl
+  document.getElementById('goalDisplay').textContent = state.goalMl
+  var pct = state.goalMl > 0 ? Math.min(100, Math.round(100 * state.today.totalMl / state.goalMl)) : 0
+  document.getElementById('percent').textContent = pct
+  document.getElementById('progressFill').style.width = pct + '%'
+
+  document.getElementById('goalVal').textContent = state.goalMl
+  document.getElementById('intvVal').textContent = state.intervalMinutes
+
+  var btn = document.getElementById('toggleBtn')
+  if (state.reminderEnabled) {
+    btn.textContent = '已开启'; btn.className = 'toggle-btn toggle-on'
+  } else {
+    btn.textContent = '已关闭'; btn.className = 'toggle-btn toggle-off'
+  }
+}
+
+// ── Toast ──
+var toastTimer = null
+function toast(msg) {
+  var el = document.getElementById('toast')
+  el.textContent = msg; el.classList.add('show')
+  if (toastTimer) clearTimeout(toastTimer)
+  toastTimer = setTimeout(function () { el.classList.remove('show') }, 1800)
+}
+
+// ── 加水 ──
+function addWater(ml) {
+  state.today.totalMl += ml
+  state.today.entries.push({ t: Date.now(), ml: ml })
+  saveState(); render()
+  toast('+ ' + ml + ' ml 💧')
+}
+
+// ── 设置调节 ──
+function adjustGoal(delta) {
+  state.goalMl = Math.max(500, Math.min(5000, state.goalMl + delta))
+  saveState(); render(); restartTimer()
+}
+
+function adjustInterval(delta) {
+  state.intervalMinutes = Math.max(15, Math.min(240, state.intervalMinutes + delta))
+  saveState(); render(); restartTimer()
+}
+
+function toggleReminder() {
+  state.reminderEnabled = !state.reminderEnabled
+  saveState(); render(); restartTimer()
+  toast(state.reminderEnabled ? '提醒已开启' : '提醒已关闭')
+}
+
+function resetToday() {
+  state.today = { dateKey: todayKey(), totalMl: 0, entries: [] }
+  saveState(); render()
+  toast('今日记录已清空')
+}
+
+// ── 提醒定时器 ──
+var remindTimer = null
+
+function restartTimer() {
+  stopTimer()
+  if (!state.reminderEnabled) return
+  var ms = state.intervalMinutes * 60 * 1000
+  remindTimer = setInterval(checkReminder, Math.min(ms, 30000)) // 最多30s检查一次
+}
+
+function stopTimer() {
+  if (remindTimer) { clearInterval(remindTimer); remindTimer = null }
+}
+
+function checkReminder() {
+  var h = new Date().getHours()
+  // 睡眠免打扰
+  if (h >= 22 || h < 8) return
+
+  var now = Date.now()
+  var intervalMs = state.intervalMinutes * 60 * 1000
+  if (now - state.lastReminder >= intervalMs) {
+    state.lastReminder = now
+    saveState()
+    fireReminder()
+  }
+}
+
+function fireReminder() {
+  // 浏览器通知
+  if ('Notification' in window && Notification.permission === 'granted') {
+    new Notification('💧 喝水提醒', {
+      body: '该喝水啦，补充一杯吧！',
+      icon: 'data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100"><text y=".9em" font-size="80">💧</text></svg>',
+      tag: 'water-reminder',
+      requireInteraction: true,
+      vibrate: [200, 100, 200, 100, 200]
+    })
+  }
+  // 页面内 toast
+  toast('⏰ 该喝水啦，补充一杯吧！')
+}
+
+// ── 通知权限 ──
+function requestNotification() {
+  if ('Notification' in window && Notification.permission === 'default') {
+    Notification.requestPermission()
+  }
+}
+
+// ── 启动 ──
+function init() {
+  render()
+  requestNotification()
+  restartTimer()
+
+  // 页面可见性变化时刷新
+  document.addEventListener('visibilitychange', function () {
+    if (!document.hidden) {
+      // 从后台回来时刷新状态（处理跨天）
+      state = loadState()
+      render()
+      restartTimer()
+    }
+  })
+}
+
+init()
+</script>
+</body>
+</html>
