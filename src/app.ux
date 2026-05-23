@@ -18,7 +18,7 @@
  */
 import fetch from '@system.fetch'
 import { getSettings } from './common/util/store.js'
-import { vibrateTimes, isQuietTime } from './common/util/reminder.js'
+import { isQuietTime, fireReminder } from './common/util/reminder.js'
 
 /**
  * 后台心跳间隔（秒）。
@@ -123,7 +123,7 @@ export default {
     if (now - self._lastReminderTime >= intervalMs) {
       self._lastReminderTime = now
       console.log('[app] firing reminder at ' + new Date().toLocaleTimeString())
-      vibrateTimes(3)
+      fireReminder()
     }
   },
 

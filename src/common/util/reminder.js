@@ -1,10 +1,8 @@
 /**
- * 提醒工具（前台版）。
+ * 提醒工具。
  *
- * 平台限制：Watch S4 的 Vela 不向第三方快应用开放后台常驻 / 定时唤醒
- *（system.alarm 为空壳、音频保活无效，详见 CHANGELOG 2026-05-22）。
- * 因此提醒只在应用打开（前台）时通过 setInterval 触发，到点震动 + toast。
- * 后台定时提醒需借助手表系统自带闹钟兜底。
+ * 震动 + 花样提醒语 + 睡眠免打扰。
+ * 提醒由 app.ux 统一调度（回调链保活），本模块提供原子能力。
  *
  * 震动：Watch S4 只支持 `vibrator.vibrate({mode})`（start 为 undefined）。
  */
@@ -14,30 +12,65 @@ import prompt from '@system.prompt'
 var fgTimerId = null
 
 /**
- * 启动前台定时提醒。重复调用会先清掉上一次的定时器。
- * @param {number} intervalMinutes 提醒间隔（分钟，最小 1）
- * @param {Function} [onTrigger] 触发回调；不传则默认 fireReminder
+ * 花样喝水提醒语库。
+ * 每次提醒随机抽取一条，避免审美疲劳。
+ * 按风格分类：可爱 / 科普 / 毒舌 / 励志 / 日常
  */
-export function startForeground(intervalMinutes, onTrigger) {
-  stopForeground()
-  var minutes = intervalMinutes < 1 ? 1 : intervalMinutes
-  var ms = minutes * 60 * 1000
-  fgTimerId = setInterval(function () {
-    try {
-      if (onTrigger) onTrigger()
-      else fireReminder()
-    } catch (e) {
-      console.warn('[reminder] onTrigger error', e)
-    }
-  }, ms)
-}
+var REMINDER_MESSAGES = [
+  // ── 可爱风 ──
+  '💧 嘀嗒～你的身体在喊渴啦！',
+  '🫧 咕噜咕噜，是时候补充水分啦～',
+  '🐳 小鲸鱼提醒你：该喝水了！',
+  '🌸 喝水时间到！做一朵水润的小花～',
+  '🍀 叮！你的幸运水滴已送达～',
+  '💙 水分子们想你了，快来一杯！',
 
-/** 停止前台定时提醒。 */
-export function stopForeground() {
-  if (fgTimerId) {
-    clearInterval(fgTimerId)
-    fgTimerId = null
-  }
+  // ── 科普风 ──
+  '🧠 大脑 75% 是水，不补会变笨哦～',
+  '🩸 血液缺水会变稠，心脏很累的！',
+  '🔬 缺水 2% 就会头晕乏力，快喝！',
+  '💪 肌肉缺水 = 力量减 10%，你忍心？',
+  '🫁 每次呼吸都在失水，该补仓了！',
+  '🧬 细胞在喊 SOS：缺水缺水缺水！',
+
+  // ── 毒舌/幽默风 ──
+  '😤 再不喝水，你的肾要罢工了！',
+  '🦴 你已经是一块人形饼干干了…喝水！',
+  '👴 不喝水老得快，皱纹在路上了！',
+  '😑 系统检测到宿主水分不足，强制执行…',
+  '🥀 你正在变成一株枯萎的植物…',
+  '📢 本条消息由你的肾脏赞助播出',
+
+  // ── 励志/暖心风 ──
+  '✨ 喝完这杯，离健康又近一步！',
+  '🏆 今日喝水成就 +1，继续加油！',
+  '🌟 每一滴水都在滋养更好的你～',
+  '🎯 小目标：活着。大前提：喝水。',
+  '💎 水是最便宜的保健品，快薅！',
+  '🌈 喝完水的人运气不会太差～',
+
+  // ── 日常/实用风 ──
+  '🥤 站起来接杯水，顺便活动活动～',
+  '⏰ 定时喝水，比女朋友还关心你',
+  '📱 放下手机，拿起水杯，就现在！',
+  '🚰 吨吨吨～ 一口气补充 250ml！',
+  '🧊 加点冰块，快乐加倍～',
+  '🍵 白水喝腻了？泡杯茶也算！'
+]
+
+var _msgIndex = -1
+
+/**
+ * 获取下一条提醒语（随机不连续）。
+ * @returns {string}
+ */
+export function pickReminderMessage() {
+  var idx
+  do {
+    idx = Math.floor(Math.random() * REMINDER_MESSAGES.length)
+  } while (idx === _msgIndex && REMINDER_MESSAGES.length > 1)
+  _msgIndex = idx
+  return REMINDER_MESSAGES[idx]
 }
 
 /** 睡眠免打扰时段（含起始时，不含结束时）：22:00 → 次日 08:00。 */
@@ -67,11 +100,15 @@ export function maybeFireReminder() {
   fireReminder()
 }
 
-/** 触发一次提醒：连震 3 下 + toast。手动调用无视睡眠时段。 */
+/**
+ * 触发一次提醒：连震 3 下 + 随机花样 toast。
+ * 手动调用无视睡眠时段。
+ */
 export function fireReminder() {
   vibrateTimes(3)
+  var msg = pickReminderMessage()
   try {
-    prompt.showToast({ message: '该喝水啦，补充一杯吧 💧', duration: 0 })
+    prompt.showToast({ message: msg, duration: 0 })
   } catch (e) {
     console.warn('[reminder] toast fail', e)
   }
@@ -79,7 +116,6 @@ export function fireReminder() {
 
 /**
  * 震动一次。Watch S4 只支持 `vibrator.vibrate({mode})`，mode='long' 长震。
- * 不抛错，失败仅打日志。
  */
 export function vibrate() {
   try {
@@ -92,7 +128,7 @@ export function vibrate() {
 }
 
 /**
- * 连续震动 n 下，每下间隔约 900ms（vibrate 无 count 参数，靠定时器叠加）。
+ * 连续震动 n 下，每下间隔约 900ms。
  * @param {number} n 次数
  */
 export function vibrateTimes(n) {

@@ -262,19 +262,37 @@ function checkReminder() {
   }
 }
 
+// ── 花样提醒语 ──
+var REMINDERS = [
+  '💧 嘀嗒～你的身体在喊渴啦！','🫧 咕噜咕噜，是时候补充水分啦～','🐳 小鲸鱼提醒你：该喝水了！',
+  '🌸 喝水时间到！做一朵水润的小花～','🍀 叮！你的幸运水滴已送达～','💙 水分子们想你了，快来一杯！',
+  '🧠 大脑 75% 是水，不补会变笨哦～','🩸 血液缺水会变稠，心脏很累的！','🔬 缺水 2% 就会头晕乏力，快喝！',
+  '💪 肌肉缺水 = 力量减 10%，你忍心？','💧 每次呼吸都在失水，该补仓了！','🧬 细胞在喊 SOS：缺水缺水缺水！',
+  '😤 再不喝水，你的肾要罢工了！','🦴 你已经是一块人形饼干干了…喝水！','👴 不喝水老得快，皱纹在路上了！',
+  '😑 系统检测到宿主水分不足，强制执行…','🥀 你正在变成一株枯萎的植物…','📢 本条消息由你的肾脏赞助播出',
+  '✨ 喝完这杯，离健康又近一步！','🏆 今日喝水成就 +1，继续加油！','🌟 每一滴水都在滋养更好的你～',
+  '🎯 小目标：活着。大前提：喝水。','💎 水是最便宜的保健品，快薅！','🌈 喝完水的人运气不会太差～',
+  '🥤 站起来接杯水，顺便活动活动～','⏰ 定时喝水，比女朋友还关心你','📱 放下手机，拿起水杯，就现在！',
+  '🚰 吨吨吨～ 一口气补充 250ml！','🧊 加点冰块，快乐加倍～','🍵 白水喝腻了？泡杯茶也算！'
+]
+var _lastMsg = -1
+function pickMsg() {
+  var i; do { i = Math.floor(Math.random() * REMINDERS.length) } while (i === _lastMsg && REMINDERS.length > 1)
+  _lastMsg = i; return REMINDERS[i]
+}
+
 function fireReminder() {
-  // 浏览器通知
+  var msg = pickMsg()
   if ('Notification' in window && Notification.permission === 'granted') {
     new Notification('💧 喝水提醒', {
-      body: '该喝水啦，补充一杯吧！',
+      body: msg,
       icon: 'data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100"><text y=".9em" font-size="80">💧</text></svg>',
       tag: 'water-reminder',
       requireInteraction: true,
       vibrate: [200, 100, 200, 100, 200]
     })
   }
-  // 页面内 toast
-  toast('⏰ 该喝水啦，补充一杯吧！')
+  toast('⏰ ' + msg)
 }
 
 // ── 通知权限 ──
