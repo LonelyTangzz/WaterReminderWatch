@@ -51,23 +51,28 @@ export default {
   },
 
   /**
-   * 启动回调驱动循环。与 setInterval 不同，这里完全由网络回调链驱动。
-   * 同时保留一个兜底 setInterval 用于前台时加速检查。
+   * 启动/重启回调驱动循环。
+   * 如果提醒已关闭，则不启动（不消耗网络、不展示 Logo）。
    */
   _startLoop() {
     var self = this
-    self._loopRunning = true
+    var enabled = self._settings && self._settings.reminderEnabled
 
-    // 清理旧定时器
-    if (self._loopTimer) {
-      clearInterval(self._loopTimer)
-      self._loopTimer = null
+    // 停掉旧循环
+    self._stopLoop()
+
+    if (!enabled) {
+      console.log('[app] reminder disabled, loop not started')
+      return
     }
 
-    // 兜底：前台时用 setInterval 做更频繁的检查（网络不通时也不至于完全停摆）
+    self._loopRunning = true
+
+    // 兜底定时器：前台时加速检查，网络不通也不至于完全停摆
     self._loopTimer = setInterval(function () {
-      if (!self._loopRunning) self._startLoop()
-      self._checkReminder()
+      if (self._loopRunning && self._settings && self._settings.reminderEnabled) {
+        self._checkReminder()
+      }
     }, HEARTBEAT_SEC * 1000)
 
     // 启动回调链
@@ -76,12 +81,31 @@ export default {
   },
 
   /**
+   * 停止回调循环。关闭提醒或 onDestroy 时调用。
+   * 循环停止 → system.request 不再活跃 → 表盘 Logo 消失。
+   */
+  _stopLoop() {
+    this._loopRunning = false
+    if (this._loopTimer) {
+      clearInterval(this._loopTimer)
+      this._loopTimer = null
+    }
+    console.log('[app] callback loop stopped')
+  },
+
+  /**
    * 发起一次心跳 fetch，完成后在回调中检查提醒 + 调度下一次。
-   * 这是核心：不依赖 setInterval，完全由网络回调链驱动。
+   * 核心：不依赖 setInterval，完全由网络回调链驱动。
+   * 如果提醒已关闭，不再调度下一次 → 循环自然终止。
    */
   _scheduleNext() {
     var self = this
     if (!self._loopRunning) return
+    // 双重检查：提醒关闭时终止循环
+    if (!self._settings || !self._settings.reminderEnabled) {
+      self._stopLoop()
+      return
+    }
 
     fetch.fetch({
       url: 'http://httpbin.org/delay/' + HEARTBEAT_SEC,
@@ -89,27 +113,34 @@ export default {
       responseType: 'text',
       success: function () {
         self._checkReminder()
-        self._scheduleNext()
+        // 检查后重新判断：提醒可能已被关闭
+        if (self._loopRunning && self._settings && self._settings.reminderEnabled) {
+          self._scheduleNext()
+        } else {
+          self._stopLoop()
+        }
       },
       fail: function () {
-        // 网络不通 → 快速失败 → 立即重试（失败时保活窗口短，但回调链不断）
         self._checkReminder()
-        // 失败后稍等再重试，避免无网络时疯狂重试
-        setTimeout(function () {
-          self._scheduleNext()
-        }, 2000)
+        if (self._loopRunning && self._settings && self._settings.reminderEnabled) {
+          setTimeout(function () {
+            self._scheduleNext()
+          }, 2000)
+        } else {
+          self._stopLoop()
+        }
       }
     })
   },
 
   /**
    * 提醒检查。
-   * 判断：提醒已开启 + 距上次提醒已过间隔 + 非睡眠时段 → 触发震动。
    */
   _checkReminder() {
     var self = this
     var s = self._settings
     if (!s || !s.reminderEnabled) {
+      self._stopLoop()
       return
     }
 
@@ -129,19 +160,27 @@ export default {
 
   /**
    * 外部可调用：设置变更后同步。
+   * 提醒开关变化时自动启动/停止后台循环。
    */
   syncSettings(settings) {
+    var wasEnabled = this._settings && this._settings.reminderEnabled
     this._settings = settings
-    console.log('[app] settings synced')
+    var isEnabled = settings && settings.reminderEnabled
+    console.log('[app] settings synced, reminder=' + isEnabled)
+
+    if (isEnabled && !wasEnabled) {
+      // 从关闭→开启：启动循环
+      this._startLoop()
+    } else if (!isEnabled && wasEnabled) {
+      // 从开启→关闭：停止循环（Logo 消失）
+      this._stopLoop()
+    }
+    // 开关没变 → 不重启，避免打断进行中的 fetch
   },
 
   onDestroy() {
-    console.log('[app] destroyed, stopping loop')
-    this._loopRunning = false
-    if (this._loopTimer) {
-      clearInterval(this._loopTimer)
-      this._loopTimer = null
-    }
+    console.log('[app] destroyed')
+    this._stopLoop()
   }
 }
 </script>
