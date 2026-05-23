@@ -19,10 +19,7 @@
   ],
   "config": {
     "logLevel": "log",
-    "designWidth": 480,
-    "background": {
-      "features": ["system.request"]
-    }
+    "designWidth": 480
   },
   "router": {
     "entry": "pages/index",
