@@ -13,15 +13,11 @@
     { "name": "system.router" },
     { "name": "system.storage" },
     { "name": "system.prompt" },
-    { "name": "system.vibrator" },
-    { "name": "system.audio" }
+    { "name": "system.vibrator" }
   ],
   "config": {
     "logLevel": "log",
-    "designWidth": 480,
-    "background": {
-      "features": ["system.audio"]
-    }
+    "designWidth": 480
   },
   "router": {
     "entry": "pages/index",

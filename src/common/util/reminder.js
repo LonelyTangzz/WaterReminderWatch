@@ -10,36 +10,8 @@
  */
 import vibrator from '@system.vibrator'
 import prompt from '@system.prompt'
-import audio from '@system.audio'
 
 var fgTimerId = null
-
-/**
- * 启动静音音频后台保活。按官方文档，后台逻辑应放在 app.ux 中调用
- *（页面会随退后台销毁，app 实例常驻）。持续播放静音 WAV +
- * notificationVisible 提升为前台服务级播放，尝试让应用退后台后不被冻结。
- */
-export function startKeepAlive() {
-  try {
-    audio.src = '/common/silent.wav'
-    audio.loop = true
-    audio.streamType = 'music'
-    audio.notificationVisible = true
-    audio.title = '喝水提醒运行中'
-    audio.play()
-  } catch (e) {
-    console.warn('[reminder] keepalive fail', e)
-  }
-}
-
-/** 停止后台保活音频。 */
-export function stopKeepAlive() {
-  try {
-    audio.stop()
-  } catch (e) {
-    console.warn('[reminder] stopKeepAlive error', e)
-  }
-}
 
 /**
  * 启动前台定时提醒。重复调用会先清掉上一次的定时器。

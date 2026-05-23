@@ -103,21 +103,46 @@
  * 主页脚本。
  * 数据来自 common/util/store.js（settings + today）。
  * onShow 刷新界面并按设置启动前台提醒；onHide 停止提醒定时器。
+ *
+ * 提醒策略：应用打开（前台）时，按用户设置的间隔定时检查是否该提醒，
+ * 睡眠时段（22:00–08:00）自动静默跳过。
+ * 后台提醒不在快应用能力范围内（S4 Vela 平台硬限制，详见 CHANGELOG）。
  */
 import router from '@system.router'
 import prompt from '@system.prompt'
 import { getSettings, getToday, addIntake } from '../../common/util/store.js'
+import { startForeground, stopForeground, maybeFireReminder } from '../../common/util/reminder.js'
 
 export default {
   private: {
     totalMl: 0,
     goalMl: 2000,
-    percent: 0
+    percent: 0,
+    intervalMinutes: 60,
+    reminderEnabled: true
   },
 
   onShow() {
-    // 提醒定时器统一由 app.ux 管理（后台验证期），页面只刷新 UI。
-    this.refresh()
+    var self = this
+    // 刷新 UI 并读取设置 → 若提醒开启则启动前台定时器
+    getSettings().then(function (settings) {
+      self.goalMl = settings.goalMl
+      self.intervalMinutes = settings.intervalMinutes
+      // 刷新今日数据
+      return getToday()
+    }).then(function (today) {
+      self.totalMl = today.totalMl
+      self.percent = self.goalMl > 0
+        ? Math.min(100, Math.round(100 * self.totalMl / self.goalMl))
+        : 0
+      // 启动前台提醒定时器（使用 maybeFireReminder 自动处理睡眠免打扰）
+      self._startReminderIfEnabled()
+    })
+  },
+
+  onHide() {
+    // 离开首页时停止提醒定时器（页面销毁即不再生效）
+    stopForeground()
   },
 
   /** 从存储拉取 settings + today，刷新 hero 区。 */
@@ -131,6 +156,21 @@ export default {
         ? Math.min(100, Math.round(100 * this.totalMl / this.goalMl))
         : 0
     })
+  },
+
+  /**
+   * 若提醒开启，按设置间隔启动前台定时提醒；否则停止。
+   * 每次页面 onShow 或设置变更后应调用本方法以确保定时器与最新设置同步。
+   */
+  _startReminderIfEnabled() {
+    stopForeground()
+    var enabled = this.reminderEnabled
+    // 兼容旧存储中没有 reminderEnabled 字段的情况，默认开启
+    if (enabled === undefined) enabled = true
+    if (enabled) {
+      var minutes = this.intervalMinutes || 60
+      startForeground(minutes, maybeFireReminder)
+    }
   },
 
   addSmall() { this._add(150) },
