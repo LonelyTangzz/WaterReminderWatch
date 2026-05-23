@@ -4,8 +4,8 @@
 -->
 <template>
   <div class="page">
-    <text class="nav-btn" onclick="prevDay">&lt; {{ dateLabel }}</text>
-    <text class="nav-btn" onclick="nextDay">{{ dateLabel }} &gt;</text>
+    <text class="nav-btn" onclick="prevDay">{{ _idx < _history.length - 1 ? '< ' + dateLabel : dateLabel }}</text>
+    <text class="nav-btn" onclick="nextDay">{{ _idx > 0 ? dateLabel + ' >' : '' }}</text>
     <text class="head-total">{{ totalMl }} ml</text>
     <text class="head-sub">{{ T.times }} {{ count }}</text>
     <text class="empty">{{ count === 0 ? T.noRecord : '' }}</text>
@@ -40,14 +40,44 @@ import { t } from '../../common/util/i18n.js'
 var HISTORY_KEY = 'wr_history_v1'
 
 export default {
-  private: { totalMl: 0, count: 0, rows: [], dateLabel: '', T: {} },
-  _history: [], _idx: -1,
+  private: { totalMl: 0, count: 0, rows: [], dateLabel: '', T: {}, _idx: 0, _history: [] },
 
   onShow() {
     var self = this
     self.T = { times: t('times'), noRecord: t('noRecord'), back: t('back') }
     getToday().then(function (today) {
-      self._loadHistory(today)
+      self._archiveToday(today).then(function () {
+        self._loadHistory(today)
+      })
+    })
+  },
+
+  _archiveToday(today) {
+    var self = this
+    return self._readHistory().then(function (hist) {
+      if (!today.totalMl && !hist.length) return
+      var found = -1
+      for (var i = 0; i < hist.length; i++) {
+        if (hist[i].dateKey === today.dateKey) { found = i; break }
+      }
+      if (found >= 0) {
+        hist[found].totalMl = today.totalMl
+        hist[found].entries = today.entries
+      } else if (today.totalMl > 0) {
+        hist.unshift({ dateKey: today.dateKey, totalMl: today.totalMl, entries: today.entries })
+      }
+      var trimmed = hist.slice(0, 30)
+      var obj = {}
+      for (var j = 0; j < trimmed.length; j++) {
+        obj[trimmed[j].dateKey] = { totalMl: trimmed[j].totalMl, entries: trimmed[j].entries }
+      }
+      return self._writeHistory(JSON.stringify(obj))
+    })
+  },
+
+  _writeHistory(raw) {
+    return new Promise(function (resolve) {
+      storage.set({ key: HISTORY_KEY, value: raw, success: resolve, fail: resolve })
     })
   },
 
