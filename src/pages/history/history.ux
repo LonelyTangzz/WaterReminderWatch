@@ -32,44 +32,31 @@
 
 <script>
 import router from '@system.router'
-import prompt from '@system.prompt'
 import { getToday } from '../../common/util/store.js'
-import { getHistory, exportData } from '../../common/util/history-store.js'
 import { t } from '../../common/util/i18n.js'
 
 export default {
   private: { totalMl: 0, count: 0, rows: [], dateLabel: '', T: {} },
-  _history: [], _idx: -1,
 
   onShow() {
     var self = this
     getToday().then(function (today) {
-      return getHistory().then(function (hist) {
-        self._history = [{ dateKey: today.dateKey, totalMl: today.totalMl, entries: today.entries || [] }]
-        for (var i = 0; i < hist.length; i++) {
-          if (hist[i].dateKey !== today.dateKey) self._history.push(hist[i])
-        }
-        self._idx = 0; self._render()
-        self.T = { times: t('times'), noRecord: t('noRecord'), back: t('back') }
-      })
+      self.totalMl = today.totalMl
+      var entries = today.entries || []
+      self.count = entries.length
+      self.dateLabel = t('today')
+      var rows = []
+      for (var i = entries.length - 1; i >= 0 && rows.length < 8; i--) {
+        rows.push({ time: formatTime(entries[i].t), ml: entries[i].ml })
+      }
+      self.rows = rows
+      self.T = { times: t('times'), noRecord: t('noRecord'), back: t('back') }
     })
   },
 
-  _render() {
-    var d = this._history[this._idx]
-    if (!d) return
-    this.totalMl = d.totalMl; this.count = (d.entries || []).length
-    this.dateLabel = this._idx === 0 ? t('today') : d.dateKey
-    var rows = [], entries = d.entries || []
-    for (var i = entries.length - 1; i >= 0 && rows.length < 8; i--) {
-      rows.push({ time: formatTime(entries[i].t), ml: entries[i].ml })
-    }
-    this.rows = rows
-  },
-
-  prevDay() { if (this._idx < this._history.length - 1) { this._idx++; this._render() } },
-  nextDay() { if (this._idx > 0) { this._idx--; this._render() } },
-  doExport() { exportData().then(function (s) { prompt.showToast({ message: s || 'OK', duration: 0 }) }) },
+  prevDay() {},
+  nextDay() {},
+  doExport() {},
   goBack() { router.back() }
 }
 
