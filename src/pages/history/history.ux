@@ -32,31 +32,85 @@
 
 <script>
 import router from '@system.router'
+import prompt from '@system.prompt'
+import storage from '@system.storage'
 import { getToday } from '../../common/util/store.js'
 import { t } from '../../common/util/i18n.js'
 
+var HISTORY_KEY = 'wr_history_v1'
+
 export default {
   private: { totalMl: 0, count: 0, rows: [], dateLabel: '', T: {} },
+  _history: [], _idx: -1,
 
   onShow() {
     var self = this
+    self.T = { times: t('times'), noRecord: t('noRecord'), back: t('back') }
     getToday().then(function (today) {
-      self.totalMl = today.totalMl
-      var entries = today.entries || []
-      self.count = entries.length
-      self.dateLabel = t('today')
-      var rows = []
-      for (var i = entries.length - 1; i >= 0 && rows.length < 8; i--) {
-        rows.push({ time: formatTime(entries[i].t), ml: entries[i].ml })
-      }
-      self.rows = rows
-      self.T = { times: t('times'), noRecord: t('noRecord'), back: t('back') }
+      self._loadHistory(today)
     })
   },
 
-  prevDay() {},
-  nextDay() {},
-  doExport() {},
+  _loadHistory(today) {
+    var self = this
+    self._readHistory().then(function (hist) {
+      self._history = [{ dateKey: today.dateKey, totalMl: today.totalMl, entries: today.entries || [] }]
+      for (var i = 0; i < hist.length; i++) {
+        if (hist[i].dateKey !== today.dateKey) self._history.push(hist[i])
+      }
+      self._idx = 0
+      self._showDay()
+    })
+  },
+
+  _readHistory() {
+    return new Promise(function (resolve) {
+      storage.get({ key: HISTORY_KEY, success: function (d) { resolve(d || '') }, fail: function () { resolve('') } })
+    }).then(function (raw) {
+      if (!raw) return []
+      try {
+        var obj = JSON.parse(raw), days = []
+        for (var k in obj) {
+          if (Object.prototype.hasOwnProperty.call(obj, k)) {
+            days.push({ dateKey: k, totalMl: obj[k].totalMl || 0, entries: obj[k].entries || [] })
+          }
+        }
+        days.sort(function (a, b) { return a.dateKey < b.dateKey ? 1 : -1 })
+        return days.slice(0, 30)
+      } catch (e) { return [] }
+    })
+  },
+
+  _showDay() {
+    var d = this._history[this._idx]
+    if (!d) return
+    this.totalMl = d.totalMl
+    this.count = (d.entries || []).length
+    this.dateLabel = this._idx === 0 ? t('today') : d.dateKey
+    var rows = [], entries = d.entries || []
+    for (var i = entries.length - 1; i >= 0 && rows.length < 8; i--) {
+      rows.push({ time: formatTime(entries[i].t), ml: entries[i].ml })
+    }
+    this.rows = rows
+  },
+
+  prevDay() {
+    if (this._idx < this._history.length - 1) { this._idx++; this._showDay() }
+  },
+  nextDay() {
+    if (this._idx > 0) { this._idx--; this._showDay() }
+  },
+  doExport() {
+    var self = this
+    self._readHistory().then(function (hist) {
+      if (!hist.length) { prompt.showToast({ message: '暂无数据', duration: 0 }); return }
+      var lines = []
+      for (var i = 0; i < hist.length; i++) {
+        lines.push(hist[i].dateKey + ' ' + hist[i].totalMl + 'ml')
+      }
+      prompt.showToast({ message: lines.slice(0, 5).join(', '), duration: 0 })
+    })
+  },
   goBack() { router.back() }
 }
 
