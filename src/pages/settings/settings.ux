@@ -3,53 +3,53 @@
 -->
 <template>
   <div class="page">
-    <text class="title">设置</text>
+    <text class="title">{{ T.title }}</text>
 
     <div class="row">
-      <text class="label">目标</text>
+      <text class="label">{{ T.goal }}</text>
       <text class="step-btn" onclick="goalDown">−</text>
       <text class="step-val">{{ goalMl }}</text>
       <text class="step-btn" onclick="goalUp">+</text>
     </div>
 
     <div class="row">
-      <text class="label">间隔</text>
+      <text class="label">{{ T.interval }}</text>
       <text class="step-btn" onclick="intvDown">−</text>
       <text class="step-val">{{ intervalMinutes }}m</text>
       <text class="step-btn" onclick="intvUp">+</text>
     </div>
 
     <div class="row">
-      <text class="label">小杯</text>
+      <text class="label">{{ T.smallCup }}</text>
       <text class="step-btn" onclick="cup1Down">−</text>
       <text class="step-val">{{ cup1Ml }}</text>
       <text class="step-btn" onclick="cup1Up">+</text>
     </div>
 
     <div class="row">
-      <text class="label">中杯</text>
+      <text class="label">{{ T.mediumCup }}</text>
       <text class="step-btn" onclick="cup2Down">−</text>
       <text class="step-val">{{ cup2Ml }}</text>
       <text class="step-btn" onclick="cup2Up">+</text>
     </div>
 
     <div class="row">
-      <text class="label">大杯</text>
+      <text class="label">{{ T.largeCup }}</text>
       <text class="step-btn" onclick="cup3Down">−</text>
       <text class="step-val">{{ cup3Ml }}</text>
       <text class="step-btn" onclick="cup3Up">+</text>
     </div>
 
     <div class="row">
-      <text class="label">提醒</text>
-      <text class="toggle" onclick="toggleReminder">{{ reminderEnabled ? '已开启' : '已关闭' }}</text>
+      <text class="label">{{ T.reminder }}</text>
+      <text class="toggle" onclick="toggleReminder">{{ reminderEnabled ? T.reminderOn : T.reminderOff }}</text>
     </div>
 
-    <text class="sleep">睡眠 22:00–08:00 不提醒</text>
+    <text class="sleep">{{ T.quietHint }}</text>
 
     <div class="foot">
-      <text class="danger-btn" onclick="clearToday">清空今日</text>
-      <text class="b" onclick="goBack">返回</text>
+      <text class="danger-btn" onclick="clearToday">{{ T.clearToday }}</text>
+      <text class="b" onclick="goBack">{{ T.back }}</text>
     </div>
   </div>
 </template>
@@ -95,6 +95,7 @@
 import router from '@system.router'
 import prompt from '@system.prompt'
 import { getSettings, setSettings, resetToday } from '../../common/util/store.js'
+import { t } from '../../common/util/i18n.js'
 
 export default {
   private: {
@@ -103,18 +104,28 @@ export default {
     reminderEnabled: true,
     cup1Ml: 150,
     cup2Ml: 250,
-    cup3Ml: 500
+    cup3Ml: 500,
+    T: {}
   },
 
   onInit() {
+    var self = this
     getSettings().then((s) => {
-      this.goalMl = s.goalMl
-      this.intervalMinutes = s.intervalMinutes
-      this.reminderEnabled = s.reminderEnabled
-      this.cup1Ml = s.cup1Ml || 150
-      this.cup2Ml = s.cup2Ml || 250
-      this.cup3Ml = s.cup3Ml || 500
+      self.goalMl = s.goalMl
+      self.intervalMinutes = s.intervalMinutes
+      self.reminderEnabled = s.reminderEnabled
+      self.cup1Ml = s.cup1Ml || 150
+      self.cup2Ml = s.cup2Ml || 250
+      self.cup3Ml = s.cup3Ml || 500
+      self._loadI18n()
     })
+  },
+
+  _loadI18n() {
+    var T = {}
+    var keys = ['title','goal','interval','smallCup','mediumCup','largeCup','reminder','reminderOn','reminderOff','quietHint','clearToday','back','clearDone','reminderOnMsg','reminderOffMsg']
+    for (var i = 0; i < keys.length; i++) { T[keys[i]] = t(keys[i]) }
+    this.T = T
   },
 
   save() {
@@ -151,7 +162,7 @@ export default {
     this.reminderEnabled = !this.reminderEnabled
     var self = this
     this.save().then(() => {
-      prompt.showToast({ message: self.reminderEnabled ? '提醒已开启' : '提醒已关闭', duration: 0 })
+      prompt.showToast({ message: self.reminderEnabled ? self.T.reminderOnMsg : self.T.reminderOffMsg, duration: 0 })
 
       // 尝试替换 Logo（透明/可见）
       self._swapLogo(self.reminderEnabled)
@@ -192,7 +203,7 @@ export default {
 
   clearToday() {
     resetToday().then(() => {
-      prompt.showToast({ message: '今日记录已清空', duration: 0 })
+      prompt.showToast({ message: self.T.clearDone, duration: 0 })
     })
   },
 

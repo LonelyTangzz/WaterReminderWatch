@@ -4,17 +4,17 @@
 -->
 <template>
   <div class="page">
-    <text class="head-total">今日 {{ totalMl }} ml</text>
-    <text class="head-sub">共 {{ count }} 次</text>
+    <text class="head-total">{{ T.today }} {{ totalMl }} ml</text>
+    <text class="head-sub">{{ T.times }} {{ count }} </text>
 
-    <text class="empty">{{ count === 0 ? '今天还没有记录' : '' }}</text>
+    <text class="empty">{{ count === 0 ? T.noRecord : '' }}</text>
 
     <div class="entry" for="{{ rows }}">
       <text class="entry-time">{{ $item.time }}</text>
       <text class="entry-ml">+{{ $item.ml }} ml</text>
     </div>
 
-    <text class="b" onclick="goBack">返回</text>
+    <text class="b" onclick="goBack">{{ T.back }}</text>
   </div>
 </template>
 
@@ -43,24 +43,28 @@
  */
 import router from '@system.router'
 import { getToday } from '../../common/util/store.js'
+import { t } from '../../common/util/i18n.js'
 
 export default {
   private: {
     totalMl: 0,
     count: 0,
-    rows: []
+    rows: [],
+    T: {}
   },
 
   onShow() {
+    var self = this
     getToday().then((today) => {
-      this.totalMl = today.totalMl
+      self.totalMl = today.totalMl
       var entries = today.entries || []
-      this.count = entries.length
+      self.count = entries.length
       var rows = []
       for (var i = entries.length - 1; i >= 0 && rows.length < 8; i--) {
         rows.push({ time: formatTime(entries[i].t), ml: entries[i].ml })
       }
-      this.rows = rows
+      self.rows = rows
+      self.T = { today: t('today'), times: t('times'), noRecord: t('noRecord'), back: t('back') }
     })
   },
 
