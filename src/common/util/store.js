@@ -213,30 +213,27 @@ export function getHistory() {
  */
 export function archiveToday() {
   var tk = todayKey()
-  return Promise.all([getToday(), getHistory()]).then(function (arr) {
-    var today = arr[0]
-    var history = arr[1]
-    // 查找是否已有今天的数据
-    var found = false
-    for (var i = 0; i < history.length; i++) {
-      if (history[i].dateKey === tk) {
-        history[i].totalMl = today.totalMl
-        history[i].entries = today.entries
-        found = true
-        break
+  return getToday().then(function (today) {
+    return getHistory().then(function (history) {
+      var found = false
+      for (var i = 0; i < history.length; i++) {
+        if (history[i].dateKey === tk) {
+          history[i].totalMl = today.totalMl
+          history[i].entries = today.entries
+          found = true
+          break
+        }
       }
-    }
-    if (!found && today.totalMl > 0) {
-      history.unshift({ dateKey: tk, totalMl: today.totalMl, entries: today.entries })
-    }
-    // 限制最多30天
-    var trimmed = history.slice(0, MAX_HISTORY_DAYS)
-    // 转为存储格式 { "yyyy-MM-dd": {...} }
-    var obj = {}
-    for (var j = 0; j < trimmed.length; j++) {
-      obj[trimmed[j].dateKey] = { totalMl: trimmed[j].totalMl, entries: trimmed[j].entries }
-    }
-    return setItem(HISTORY_KEY, JSON.stringify(obj))
+      if (!found && today.totalMl > 0) {
+        history.unshift({ dateKey: tk, totalMl: today.totalMl, entries: today.entries })
+      }
+      var trimmed = history.slice(0, MAX_HISTORY_DAYS)
+      var obj = {}
+      for (var j = 0; j < trimmed.length; j++) {
+        obj[trimmed[j].dateKey] = { totalMl: trimmed[j].totalMl, entries: trimmed[j].entries }
+      }
+      return setItem(HISTORY_KEY, JSON.stringify(obj))
+    })
   })
 }
 

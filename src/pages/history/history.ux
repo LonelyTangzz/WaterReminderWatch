@@ -5,9 +5,9 @@
   <div class="page">
     <!-- 日期导航 -->
     <div class="nav-date">
-      <text class="nav-arrow" onclick="prevDay">◀</text>
+      <text class="nav-arrow" onclick="prevDay">&lt;</text>
       <text class="nav-label">{{ dateLabel }}</text>
-      <text class="nav-arrow" onclick="nextDay">▶</text>
+      <text class="nav-arrow" onclick="nextDay">&gt;</text>
     </div>
 
     <text class="head-total">{{ dateLabel }} {{ totalMl }} ml</text>
