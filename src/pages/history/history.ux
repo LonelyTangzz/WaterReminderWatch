@@ -4,9 +4,11 @@
 -->
 <template>
   <div class="page">
-    <text class="nav-btn" onclick="prevDay">&lt;</text>
-    <text class="nav-date">{{ dateLabel }}</text>
-    <text class="nav-btn" onclick="nextDay">&gt;</text>
+    <div class="nav-row">
+      <text class="nav-btn" onclick="prevDay">&lt;</text>
+      <text class="nav-date">{{ dateLabel }}</text>
+      <text class="nav-btn" onclick="nextDay">&gt;</text>
+    </div>
     <text class="head-total">{{ totalMl }} ml</text>
     <text class="head-sub">{{ T.times }} {{ count }}</text>
     <text class="empty">{{ count === 0 ? T.noRecord : '' }}</text>
@@ -21,7 +23,8 @@
 
 <style>
 .page { flex-direction: column; align-items: center; justify-content: center; width: 480px; height: 480px; background-color: #000000; }
-.nav-btn { font-size: 22px; color: #4FC3F7; padding: 3px 6px; }
+.nav-row { flex-direction: row; align-items: center; justify-content: center; margin-bottom: 6px; }
+.nav-btn { font-size: 22px; color: #4FC3F7; padding: 3px 8px; }
 .nav-date { font-size: 20px; color: #888888; min-width: 100px; text-align: center; }
 .head-total { font-size: 34px; color: #4FC3F7; font-weight: bold; }
 .head-sub { font-size: 20px; color: #888888; margin-top: 2px; margin-bottom: 6px; }
