@@ -6,7 +6,7 @@
   <div class="page">
     <div class="nav-row">
       <text class="nav-btn" onclick="prevDay">&lt;</text>
-      <text class="nav-date">{{ dateLabel }}</text>
+      <text class="nav-date" onclick="pickDate">{{ dateLabel }}</text>
       <text class="nav-btn" onclick="nextDay">&gt;</text>
     </div>
     <text class="head-total">{{ totalMl }} ml</text>
@@ -25,7 +25,7 @@
 .page { flex-direction: column; align-items: center; justify-content: center; width: 480px; height: 480px; background-color: #000000; }
 .nav-row { flex-direction: row; align-items: center; justify-content: center; margin-bottom: 6px; }
 .nav-btn { font-size: 22px; color: #4FC3F7; padding: 3px 8px; }
-.nav-date { font-size: 20px; color: #888888; min-width: 100px; text-align: center; }
+.nav-date { font-size: 20px; color: #4FC3F7; min-width: 100px; text-align: center; }
 .head-total { font-size: 34px; color: #4FC3F7; font-weight: bold; }
 .head-sub { font-size: 20px; color: #888888; margin-top: 2px; margin-bottom: 6px; }
 .empty { font-size: 24px; color: #666666; }
@@ -50,6 +50,7 @@ export default {
 
   onShow() {
     var self = this
+    self.dateLabel = t('today')
     self.T = { times: t('times'), noRecord: t('noRecord'), back: t('back') }
     getToday().then(function (today) {
       self._loadHistory(today)
@@ -105,6 +106,10 @@ export default {
     this.totalMl = d.totalMl
     this.count = (d.entries || []).length
     this.dateLabel = this._idx === 0 ? t('today') : d.dateKey
+    // 有历史时显示 "今日 1/5"
+    if (this._history.length > 1) {
+      this.dateLabel = this.dateLabel + ' ' + (this._idx + 1) + '/' + this._history.length
+    }
     var rows = [], entries = d.entries || []
     for (var i = entries.length - 1; i >= 0 && rows.length < 8; i--) {
       rows.push({ time: formatTime(entries[i].t), ml: entries[i].ml })
@@ -112,11 +117,13 @@ export default {
     this.rows = rows
   },
 
-  prevDay() {
-    if (this._idx < this._history.length - 1) { this._idx++; this._showDay() }
-  },
-  nextDay() {
-    if (this._idx > 0) { this._idx--; this._showDay() }
+  prevDay() { if (this._idx < this._history.length - 1) { this._idx++; this._showDay() } },
+  nextDay() { if (this._idx > 0) { this._idx--; this._showDay() } },
+  pickDate() {
+    var len = this._history.length
+    if (len <= 1) return
+    this._idx = (this._idx + 1) % len
+    this._showDay()
   },
   doExport() {
     var self = this
