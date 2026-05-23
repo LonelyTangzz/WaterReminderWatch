@@ -4,8 +4,9 @@
 -->
 <template>
   <div class="page">
-    <text class="nav-btn" onclick="prevDay">{{ _idx < _history.length - 1 ? '< ' + dateLabel : dateLabel }}</text>
-    <text class="nav-btn" onclick="nextDay">{{ _idx > 0 ? dateLabel + ' >' : '' }}</text>
+    <text class="nav-btn" onclick="prevDay">&lt;</text>
+    <text class="nav-date">{{ dateLabel }}</text>
+    <text class="nav-btn" onclick="nextDay">&gt;</text>
     <text class="head-total">{{ totalMl }} ml</text>
     <text class="head-sub">{{ T.times }} {{ count }}</text>
     <text class="empty">{{ count === 0 ? T.noRecord : '' }}</text>
@@ -20,7 +21,8 @@
 
 <style>
 .page { flex-direction: column; align-items: center; justify-content: center; width: 480px; height: 480px; background-color: #000000; }
-.nav-btn { font-size: 22px; color: #4FC3F7; padding: 3px 8px; }
+.nav-btn { font-size: 22px; color: #4FC3F7; padding: 3px 6px; }
+.nav-date { font-size: 20px; color: #888888; min-width: 100px; text-align: center; }
 .head-total { font-size: 34px; color: #4FC3F7; font-weight: bold; }
 .head-sub { font-size: 20px; color: #888888; margin-top: 2px; margin-bottom: 6px; }
 .empty { font-size: 24px; color: #666666; }
@@ -40,54 +42,33 @@ import { t } from '../../common/util/i18n.js'
 var HISTORY_KEY = 'wr_history_v1'
 
 export default {
-  private: { totalMl: 0, count: 0, rows: [], dateLabel: '', T: {}, _idx: 0, _history: [] },
+  private: { totalMl: 0, count: 0, rows: [], dateLabel: '', T: {} },
+  _history: [], _idx: -1,
 
   onShow() {
     var self = this
     self.T = { times: t('times'), noRecord: t('noRecord'), back: t('back') }
     getToday().then(function (today) {
-      self._archiveToday(today).then(function () {
-        self._loadHistory(today)
-      })
-    })
-  },
-
-  _archiveToday(today) {
-    var self = this
-    return self._readHistory().then(function (hist) {
-      if (!today.totalMl && !hist.length) return
-      var found = -1
-      for (var i = 0; i < hist.length; i++) {
-        if (hist[i].dateKey === today.dateKey) { found = i; break }
-      }
-      if (found >= 0) {
-        hist[found].totalMl = today.totalMl
-        hist[found].entries = today.entries
-      } else if (today.totalMl > 0) {
-        hist.unshift({ dateKey: today.dateKey, totalMl: today.totalMl, entries: today.entries })
-      }
-      var trimmed = hist.slice(0, 30)
-      var obj = {}
-      for (var j = 0; j < trimmed.length; j++) {
-        obj[trimmed[j].dateKey] = { totalMl: trimmed[j].totalMl, entries: trimmed[j].entries }
-      }
-      return self._writeHistory(JSON.stringify(obj))
-    })
-  },
-
-  _writeHistory(raw) {
-    return new Promise(function (resolve) {
-      storage.set({ key: HISTORY_KEY, value: raw, success: resolve, fail: resolve })
+      self._loadHistory(today)
     })
   },
 
   _loadHistory(today) {
     var self = this
     self._readHistory().then(function (hist) {
-      self._history = [{ dateKey: today.dateKey, totalMl: today.totalMl, entries: today.entries || [] }]
-      for (var i = 0; i < hist.length; i++) {
-        if (hist[i].dateKey !== today.dateKey) self._history.push(hist[i])
-      }
+      // 归档今天
+      var tk = today.dateKey
+      var found = -1
+      for (var i = 0; i < hist.length; i++) { if (hist[i].dateKey === tk) { found = i; break } }
+      if (found >= 0) { hist[found] = { dateKey: tk, totalMl: today.totalMl, entries: today.entries || [] } }
+      else if (today.totalMl > 0) { hist.unshift({ dateKey: tk, totalMl: today.totalMl, entries: today.entries || [] }) }
+      if (hist.length > 30) hist = hist.slice(0, 30)
+      // 写回存储
+      var obj = {}
+      for (var j = 0; j < hist.length; j++) { obj[hist[j].dateKey] = { totalMl: hist[j].totalMl, entries: hist[j].entries } }
+      self._writeHistory(obj)
+      // 显示
+      self._history = hist
       self._idx = 0
       self._showDay()
     })
@@ -109,6 +90,10 @@ export default {
         return days.slice(0, 30)
       } catch (e) { return [] }
     })
+  },
+
+  _writeHistory(obj) {
+    storage.set({ key: HISTORY_KEY, value: JSON.stringify(obj), success: function () {}, fail: function () {} })
   },
 
   _showDay() {
