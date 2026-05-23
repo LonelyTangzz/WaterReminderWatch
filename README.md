@@ -9,7 +9,7 @@
 - **手机伴侣**：`phone-companion/index.html` —— 独立网页版，在手机浏览器打开即可接收喝水通知（Web Notification API），与手表版形成双保险
 - **每日重置**：跨天后记录自动清零（`store.js` 按日期键判断）
 
-> ⚠️ **后台提醒（2026-05-23 更新）**：改用 Vela 官方支持的 `system.request`（上传下载）作为后台保活接口——`app.ux` 周期性发起 fetch 请求维持后台活跃状态。此方案基于官方文档，但 **S4 实机效果待验证**。若仍被冻结，请使用手机伴侣网页版（`phone-companion/index.html`）作为兜底。详见 [CHANGELOG.md](CHANGELOG.md)。
+> ⚠️ **后台提醒结论（2026-05-23 实机验证）**：Vela 官方文档列的三种后台接口（`system.audio` / `system.request` / `system.geolocation`）在 Watch S4 上对第三方快应用**全部无效**——JS 线程退后台即被冻结，属平台级硬限制。仅**前台提醒**可用。如需后台提醒，请使用 [手机伴侣](phone-companion/index.html) 或手表自带闹钟兜底。详见 [CHANGELOG.md](CHANGELOG.md)。
 
 > **技术栈演进**：本项目历经 Wear OS（Jetpack Compose）→ 通用快应用（hap-toolkit）→ **小米官方 `aiot-toolkit`（Vela JS 应用）**。前两者产物在 S4 上黑屏，根因是工具链错误——Vela 需要 `aiot-toolkit --enable-jsc` 编译出的 QuickJS 字节码（`.jsc`）。完整踩坑记录见 [CHANGELOG.md](CHANGELOG.md)。
 
