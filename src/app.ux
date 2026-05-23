@@ -1,19 +1,139 @@
 <script>
 /**
- * 应用入口 — 生命周期钩子。
+ * 应用入口 — 后台保活 + 提醒调度中心。
  *
- * 提醒由各页面自行管理（前台 setInterval），app 级别仅做最轻量的
- * 生命周期日志。后台保活经实测无效（S4 Vela 平台硬限制），已移除。
+ * === 保活策略（2026-05-23 新方案） ===
+ *
+ * Vela 官方文档支持三种后台运行接口：system.audio / system.request / system.geolocation。
+ * system.audio 在 S4 上实测无效（后台仍被冻结）。
+ * 本方案改用 system.request（上传下载），官方支持矩阵明确列出 S4 可行。
+ *
+ * 原理：
+ *   1. manifest.json 声明 system.request 为后台运行接口
+ *   2. app.ux 中 setInterval 周期性发起 fetch 请求
+ *   3. 请求"进行中"时 system.request 处于"正在使用"状态 → 应用不被冻结
+ *   4. 每次请求完成后，搭载提醒检查逻辑（睡眠免打扰 + 间隔判断）
+ *
+ * 心跳 URL：用 httpbin.org/delay/3（延迟 3 秒响应），确保每次请求有足够
+ * "进行中"窗口维持后台存活。若手表无网络，请求快速失败也不影响前台功能。
+ *
+ * 提醒由 app.ux 集中管理（官方建议：后台逻辑放 app.ux，避免页面销毁影响）。
  *
  * 平台限制详见 CHANGELOG.md「2026-05-22 — 后台提醒结论」。
  */
+import fetch from '@system.fetch'
+import { getSettings } from './common/util/store.js'
+import { vibrateTimes, isQuietTime } from './common/util/reminder.js'
+
+var BG_INTERVAL_MS = 30000 // 后台心跳间隔 30 秒
+
 export default {
   onCreate() {
-    console.log('[app] created')
+    console.log('[app] created, starting background loop')
+    var self = this
+    self._lastReminderTime = 0
+
+    // 读取设置后启动后台心跳循环
+    getSettings().then(function (settings) {
+      self._settings = settings
+      console.log('[app] settings loaded, goal=' + settings.goalMl +
+        ', interval=' + settings.intervalMinutes +
+        ', reminder=' + settings.reminderEnabled)
+      self._startBgLoop()
+    }).catch(function (err) {
+      console.warn('[app] settings load fail, using defaults', err)
+      self._settings = { goalMl: 2000, intervalMinutes: 60, reminderEnabled: true }
+      self._startBgLoop()
+    })
+  },
+
+  /**
+   * 启动后台心跳 + 提醒循环。
+   * 每 BG_INTERVAL_MS 毫秒发起一次 fetch 请求维持 system.request 活跃状态，
+   * 请求完成后检查是否需要触发提醒。
+   */
+  _startBgLoop() {
+    var self = this
+    if (self._bgTimer) {
+      clearInterval(self._bgTimer)
+      self._bgTimer = null
+    }
+
+    self._bgTimer = setInterval(function () {
+      self._heartbeat()
+    }, BG_INTERVAL_MS)
+
+    // 立即执行第一次心跳
+    self._heartbeat()
+
+    console.log('[app] background loop started, interval=' + BG_INTERVAL_MS + 'ms')
+  },
+
+  /**
+   * 一次心跳：发起 fetch 请求维持后台活跃，完成后搭载提醒检查。
+   *
+   * URL 选择策略：
+   *   - 首选 httpbin.org/delay/3（延迟 3s 响应）→ 最大化"进行中"窗口
+   *   - 若网络不通（手表无 WiFi/蓝牙），请求快速失败，不影响前台
+   *
+   * 请求本身只是"心跳载体"，响应内容不关心，仅利用请求生命周期保活。
+   */
+  _heartbeat() {
+    var self = this
+    fetch.fetch({
+      url: 'http://httpbin.org/delay/3',
+      method: 'GET',
+      responseType: 'text',
+      success: function () {
+        self._onHeartbeatComplete()
+      },
+      fail: function () {
+        // 网络不通也正常——心跳只是为了维持 system.request "使用中" 状态
+        self._onHeartbeatComplete()
+      }
+    })
+  },
+
+  /**
+   * 心跳完成后的提醒检查。
+   * 判断：提醒已开启 + 距上次提醒已过间隔 + 非睡眠时段 → 触发震动。
+   */
+  _onHeartbeatComplete() {
+    var self = this
+    var s = self._settings
+    if (!s || !s.reminderEnabled) {
+      return
+    }
+
+    // 睡眠免打扰：22:00–08:00 静默
+    if (isQuietTime()) {
+      return
+    }
+
+    var now = Date.now()
+    var intervalMs = (s.intervalMinutes || 60) * 60 * 1000
+    if (now - self._lastReminderTime >= intervalMs) {
+      self._lastReminderTime = now
+      console.log('[app] firing reminder')
+      vibrateTimes(3)
+    }
+  },
+
+  /**
+   * 外部可调用：设置变更后同步（设置页保存时由主页 onShow 间接触发，
+   * 或未来扩展直接从设置页调用）。
+   */
+  syncSettings(settings) {
+    this._settings = settings
+    console.log('[app] settings synced')
   },
 
   onDestroy() {
-    console.log('[app] destroyed')
+    console.log('[app] destroyed, stopping background loop')
+    if (this._bgTimer) {
+      clearInterval(this._bgTimer)
+      this._bgTimer = null
+    }
   }
 }
 </script>

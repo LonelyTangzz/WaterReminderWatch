@@ -92,14 +92,19 @@ export default {
   },
 
   save() {
+    var self = this
     return setSettings({
-      goalMl: this.goalMl,
-      intervalMinutes: this.intervalMinutes,
-      reminderEnabled: this.reminderEnabled
+      goalMl: self.goalMl,
+      intervalMinutes: self.intervalMinutes,
+      reminderEnabled: self.reminderEnabled
     }).then((saved) => {
-      this.goalMl = saved.goalMl
-      this.intervalMinutes = saved.intervalMinutes
-      this.reminderEnabled = saved.reminderEnabled
+      self.goalMl = saved.goalMl
+      self.intervalMinutes = saved.intervalMinutes
+      self.reminderEnabled = saved.reminderEnabled
+      // 同步到 app.ux，让后台心跳循环立即感知设置变更
+      if (self.$app && typeof self.$app.syncSettings === 'function') {
+        self.$app.syncSettings(saved)
+      }
     })
   },
 
