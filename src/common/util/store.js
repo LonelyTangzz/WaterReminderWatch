@@ -18,6 +18,8 @@ import storage from '@system.storage'
 
 var SETTINGS_KEY = 'wr_settings_v1'
 var TODAY_KEY = 'wr_today_v1'
+var HISTORY_KEY = 'wr_history_v1'
+var MAX_HISTORY_DAYS = 30
 
 /** 默认设置：每日 2000ml / 每 60 分钟提醒 / 提醒开启 / 三档杯量。 */
 export var DEFAULT_SETTINGS = {
@@ -160,7 +162,11 @@ export function addIntake(ml) {
   return getToday().then(function (state) {
     state.totalMl += ml
     state.entries.push({ t: Date.now(), ml: ml })
-    return setItem(TODAY_KEY, JSON.stringify(state)).then(function () { return state })
+    return setItem(TODAY_KEY, JSON.stringify(state)).then(function () {
+      // 后台归档（不影响返回值）
+      archiveToday()
+      return state
+    })
   })
 }
 
@@ -168,6 +174,67 @@ export function addIntake(ml) {
 export function resetToday() {
   var fresh = { dateKey: todayKey(), totalMl: 0, entries: [] }
   return setItem(TODAY_KEY, JSON.stringify(fresh)).then(function () { return fresh })
+}
+
+/**
+ * 读取历史记录（最近N天）。
+ * @returns {Promise<Array>}
+ */
+export function getHistory() {
+  return getItem(HISTORY_KEY).then(function (raw) {
+    if (!raw) return []
+    try {
+      var obj = JSON.parse(raw)
+      var days = []
+      for (var k in obj) {
+        if (Object.prototype.hasOwnProperty.call(obj, k)) {
+          days.push({ dateKey: k, totalMl: obj[k].totalMl || 0, entries: obj[k].entries || [] })
+        }
+      }
+      days.sort(function (a, b) { return a.dateKey < b.dateKey ? 1 : -1 })
+      return days.slice(0, MAX_HISTORY_DAYS)
+    } catch (e) { return [] }
+  })
+}
+
+/**
+ * 归档今日到历史（安全.then链，不用Promise.all）。
+ */
+export function archiveToday() {
+  var tk = todayKey()
+  return getToday().then(function (today) {
+    return getHistory().then(function (history) {
+      var found = -1
+      for (var i = 0; i < history.length; i++) {
+        if (history[i].dateKey === tk) { found = i; break }
+      }
+      if (found >= 0) {
+        history[found].totalMl = today.totalMl
+        history[found].entries = today.entries
+      } else if (today.totalMl > 0) {
+        history.unshift({ dateKey: tk, totalMl: today.totalMl, entries: today.entries })
+      }
+      var trimmed = history.slice(0, MAX_HISTORY_DAYS)
+      var obj = {}
+      for (var j = 0; j < trimmed.length; j++) {
+        obj[trimmed[j].dateKey] = { totalMl: trimmed[j].totalMl, entries: trimmed[j].entries }
+      }
+      return setItem(HISTORY_KEY, JSON.stringify(obj))
+    })
+  })
+}
+
+/** 导出CSV文本。 */
+export function exportData() {
+  return getHistory().then(function (history) {
+    if (!history.length) return ''
+    var lines = ['date,total_ml,count']
+    for (var i = 0; i < history.length; i++) {
+      var d = history[i]
+      lines.push(d.dateKey + ',' + d.totalMl + ',' + d.entries.length)
+    }
+    return lines.join('\n')
+  })
 }
 
 /* ---------- 内部工具（避免对外暴露） ---------- */
