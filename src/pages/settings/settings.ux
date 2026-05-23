@@ -115,7 +115,11 @@ export default {
     var self = this
     this.save().then(() => {
       prompt.showToast({ message: self.reminderEnabled ? '提醒已开启' : '提醒已关闭', duration: 0 })
-      // 直接操作 app 实例启停后台循环（不依赖模块缓存/存储轮询）
+
+      // 尝试替换 Logo（透明/可见）
+      self._swapLogo(self.reminderEnabled)
+
+      // 直接操作 app 实例启停后台循环
       try {
         if (self.reminderEnabled && self.$app && typeof self.$app._startLoop === 'function') {
           self.$app._startLoop()
@@ -126,6 +130,27 @@ export default {
         console.warn('[settings] $app call fail', e)
       }
     })
+  },
+
+  /**
+   * 替换 Logo 文件以视觉隐藏/显示表盘图标。
+   * 关提醒 → logo.png 换成透明版；开提醒 → 恢复可见版。
+   * Vela sandbox 可能只读，失败静默忽略。
+   */
+  _swapLogo(visible) {
+    try {
+      var file = require('@system.file')
+      if (!file || typeof file.copy !== 'function') return
+      var src = visible ? '/common/logo_visible.png' : '/common/logo_transparent.png'
+      file.copy({
+        srcUri: src,
+        dstUri: '/common/logo.png',
+        success: function () { console.log('[settings] logo swapped, visible=' + visible) },
+        fail: function (e, code) { console.warn('[settings] logo swap fail', code, e) }
+      })
+    } catch (e) {
+      // @system.file 不可用，忽略
+    }
   },
 
   clearToday() {

@@ -15,7 +15,8 @@
     { "name": "system.prompt" },
     { "name": "system.vibrator" },
     { "name": "system.fetch" },
-    { "name": "system.request" }
+    { "name": "system.request" },
+    { "name": "system.file" }
   ],
   "config": {
     "logLevel": "log",
