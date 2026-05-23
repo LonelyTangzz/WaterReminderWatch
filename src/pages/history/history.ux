@@ -4,6 +4,8 @@
 -->
 <template>
   <div class="page">
+    <text class="nav-btn" onclick="prevDay">&lt; {{ dateLabel }}</text>
+    <text class="nav-btn" onclick="nextDay">{{ dateLabel }} &gt;</text>
     <text class="head-total">{{ totalMl }} ml</text>
     <text class="head-sub">{{ T.times }} {{ count }}</text>
     <text class="empty">{{ count === 0 ? T.noRecord : '' }}</text>
@@ -11,44 +13,63 @@
       <text class="entry-time">{{ $item.time }}</text>
       <text class="entry-ml">+{{ $item.ml }} ml</text>
     </div>
+    <text class="b" onclick="doExport">导出</text>
     <text class="b" onclick="goBack">{{ T.back }}</text>
   </div>
 </template>
 
 <style>
 .page { flex-direction: column; align-items: center; justify-content: center; width: 480px; height: 480px; background-color: #000000; }
+.nav-btn { font-size: 22px; color: #4FC3F7; padding: 3px 8px; }
 .head-total { font-size: 34px; color: #4FC3F7; font-weight: bold; }
 .head-sub { font-size: 20px; color: #888888; margin-top: 2px; margin-bottom: 6px; }
 .empty { font-size: 24px; color: #666666; }
 .entry { flex-direction: row; align-items: center; justify-content: center; margin-top: 4px; }
 .entry-time { font-size: 24px; color: #DDDDDD; width: 120px; text-align: center; }
 .entry-ml { font-size: 24px; color: #4FC3F7; width: 120px; text-align: center; }
-.b { font-size: 24px; color: #81D4FA; margin-top: 14px; padding: 6px 16px; }
+.b { font-size: 24px; color: #81D4FA; margin-top: 6px; padding: 6px 16px; }
 </style>
 
 <script>
 import router from '@system.router'
+import prompt from '@system.prompt'
 import { getToday } from '../../common/util/store.js'
+import { getHistory, exportData } from '../../common/util/history-store.js'
 import { t } from '../../common/util/i18n.js'
 
 export default {
-  private: { totalMl: 0, count: 0, rows: [], T: {} },
+  private: { totalMl: 0, count: 0, rows: [], dateLabel: '', T: {} },
+  _history: [], _idx: -1,
 
   onShow() {
     var self = this
     getToday().then(function (today) {
-      self.totalMl = today.totalMl
-      var entries = today.entries || []
-      self.count = entries.length
-      var rows = []
-      for (var i = entries.length - 1; i >= 0 && rows.length < 8; i--) {
-        rows.push({ time: formatTime(entries[i].t), ml: entries[i].ml })
-      }
-      self.rows = rows
-      self.T = { times: t('times'), noRecord: t('noRecord'), back: t('back') }
+      return getHistory().then(function (hist) {
+        self._history = [{ dateKey: today.dateKey, totalMl: today.totalMl, entries: today.entries || [] }]
+        for (var i = 0; i < hist.length; i++) {
+          if (hist[i].dateKey !== today.dateKey) self._history.push(hist[i])
+        }
+        self._idx = 0; self._render()
+        self.T = { times: t('times'), noRecord: t('noRecord'), back: t('back') }
+      })
     })
   },
 
+  _render() {
+    var d = this._history[this._idx]
+    if (!d) return
+    this.totalMl = d.totalMl; this.count = (d.entries || []).length
+    this.dateLabel = this._idx === 0 ? t('today') : d.dateKey
+    var rows = [], entries = d.entries || []
+    for (var i = entries.length - 1; i >= 0 && rows.length < 8; i--) {
+      rows.push({ time: formatTime(entries[i].t), ml: entries[i].ml })
+    }
+    this.rows = rows
+  },
+
+  prevDay() { if (this._idx < this._history.length - 1) { this._idx++; this._render() } },
+  nextDay() { if (this._idx > 0) { this._idx--; this._render() } },
+  doExport() { exportData().then(function (s) { prompt.showToast({ message: s || 'OK', duration: 0 }) }) },
   goBack() { router.back() }
 }
 
