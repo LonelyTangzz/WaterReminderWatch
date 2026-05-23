@@ -2,103 +2,111 @@
 /**
  * 应用入口 — 后台保活 + 提醒调度中心。
  *
- * === 保活策略（2026-05-23 新方案） ===
+ * === 保活策略 v2（2026-05-23） ===
  *
- * Vela 官方文档支持三种后台运行接口：system.audio / system.request / system.geolocation。
- * system.audio 在 S4 上实测无效（后台仍被冻结）。
- * 本方案改用 system.request（上传下载），官方支持矩阵明确列出 S4 可行。
+ * 核心发现：退后台后 Logo 常驻 → 系统确实接受了后台声明，但 setInterval
+ * 这类 JS 定时器被冻结。网络 I/O 回调是系统级事件，可能仍能触发。
  *
- * 原理：
- *   1. manifest.json 声明 system.request 为后台运行接口
- *   2. app.ux 中 setInterval 周期性发起 fetch 请求
- *   3. 请求"进行中"时 system.request 处于"正在使用"状态 → 应用不被冻结
- *   4. 每次请求完成后，搭载提醒检查逻辑（睡眠免打扰 + 间隔判断）
+ * v2 方案：**弃用 setInterval，改用 fetch 回调自循环**。
+ *   1. 发起 fetch(delay/10)，服务器端延迟 10 秒响应
+ *   2. 请求进行中 → system.request "正在使用" → 保活
+ *   3. 响应到达 → 回调触发 → 检查提醒 → 立即发起下一次 fetch
+ *   4. 如此形成"网络回调驱动"的无限循环，不依赖 JS 定时器
  *
- * 心跳 URL：用 httpbin.org/delay/3（延迟 3 秒响应），确保每次请求有足够
- * "进行中"窗口维持后台存活。若手表无网络，请求快速失败也不影响前台功能。
- *
- * 提醒由 app.ux 集中管理（官方建议：后台逻辑放 app.ux，避免页面销毁影响）。
- *
- * 平台限制详见 CHANGELOG.md「2026-05-22 — 后台提醒结论」。
+ * 若手表无网络，fetch 快速失败，fail 回调同样触发下一次 fetch，
+ * 形成快速重试循环。虽然失败时保活窗口短，但至少回调链不断。
  */
 import fetch from '@system.fetch'
 import { getSettings } from './common/util/store.js'
 import { vibrateTimes, isQuietTime } from './common/util/reminder.js'
 
-var BG_INTERVAL_MS = 30000 // 后台心跳间隔 30 秒
+/**
+ * 后台心跳间隔（秒）。
+ * 测试用 10s，正式版可调回 30s。
+ * 注意：这是传递给 httpbin.org/delay/ 的参数，服务器端会等这么久才响应。
+ * 意味着每次 fetch 的"进行中"窗口 = 这个秒数，也是连续两次提醒检查的最大间隔。
+ */
+var HEARTBEAT_SEC = 10
 
 export default {
   onCreate() {
-    console.log('[app] created, starting background loop')
+    console.log('[app] created, starting callback-driven loop')
     var self = this
     self._lastReminderTime = 0
+    self._loopRunning = false
+    self._loopTimer = null
 
-    // 读取设置后启动后台心跳循环
+    // 读取设置后启动回调循环
     getSettings().then(function (settings) {
       self._settings = settings
       console.log('[app] settings loaded, goal=' + settings.goalMl +
         ', interval=' + settings.intervalMinutes +
         ', reminder=' + settings.reminderEnabled)
-      self._startBgLoop()
+      self._startLoop()
     }).catch(function (err) {
       console.warn('[app] settings load fail, using defaults', err)
       self._settings = { goalMl: 2000, intervalMinutes: 60, reminderEnabled: true }
-      self._startBgLoop()
+      self._startLoop()
     })
   },
 
   /**
-   * 启动后台心跳 + 提醒循环。
-   * 每 BG_INTERVAL_MS 毫秒发起一次 fetch 请求维持 system.request 活跃状态，
-   * 请求完成后检查是否需要触发提醒。
+   * 启动回调驱动循环。与 setInterval 不同，这里完全由网络回调链驱动。
+   * 同时保留一个兜底 setInterval 用于前台时加速检查。
    */
-  _startBgLoop() {
+  _startLoop() {
     var self = this
-    if (self._bgTimer) {
-      clearInterval(self._bgTimer)
-      self._bgTimer = null
+    self._loopRunning = true
+
+    // 清理旧定时器
+    if (self._loopTimer) {
+      clearInterval(self._loopTimer)
+      self._loopTimer = null
     }
 
-    self._bgTimer = setInterval(function () {
-      self._heartbeat()
-    }, BG_INTERVAL_MS)
+    // 兜底：前台时用 setInterval 做更频繁的检查（网络不通时也不至于完全停摆）
+    self._loopTimer = setInterval(function () {
+      if (!self._loopRunning) self._startLoop()
+      self._checkReminder()
+    }, HEARTBEAT_SEC * 1000)
 
-    // 立即执行第一次心跳
-    self._heartbeat()
-
-    console.log('[app] background loop started, interval=' + BG_INTERVAL_MS + 'ms')
+    // 启动回调链
+    self._scheduleNext()
+    console.log('[app] callback loop started, heartbeat=' + HEARTBEAT_SEC + 's')
   },
 
   /**
-   * 一次心跳：发起 fetch 请求维持后台活跃，完成后搭载提醒检查。
-   *
-   * URL 选择策略：
-   *   - 首选 httpbin.org/delay/3（延迟 3s 响应）→ 最大化"进行中"窗口
-   *   - 若网络不通（手表无 WiFi/蓝牙），请求快速失败，不影响前台
-   *
-   * 请求本身只是"心跳载体"，响应内容不关心，仅利用请求生命周期保活。
+   * 发起一次心跳 fetch，完成后在回调中检查提醒 + 调度下一次。
+   * 这是核心：不依赖 setInterval，完全由网络回调链驱动。
    */
-  _heartbeat() {
+  _scheduleNext() {
     var self = this
+    if (!self._loopRunning) return
+
     fetch.fetch({
-      url: 'http://httpbin.org/delay/3',
+      url: 'http://httpbin.org/delay/' + HEARTBEAT_SEC,
       method: 'GET',
       responseType: 'text',
       success: function () {
-        self._onHeartbeatComplete()
+        self._checkReminder()
+        self._scheduleNext()
       },
       fail: function () {
-        // 网络不通也正常——心跳只是为了维持 system.request "使用中" 状态
-        self._onHeartbeatComplete()
+        // 网络不通 → 快速失败 → 立即重试（失败时保活窗口短，但回调链不断）
+        self._checkReminder()
+        // 失败后稍等再重试，避免无网络时疯狂重试
+        setTimeout(function () {
+          self._scheduleNext()
+        }, 2000)
       }
     })
   },
 
   /**
-   * 心跳完成后的提醒检查。
+   * 提醒检查。
    * 判断：提醒已开启 + 距上次提醒已过间隔 + 非睡眠时段 → 触发震动。
    */
-  _onHeartbeatComplete() {
+  _checkReminder() {
     var self = this
     var s = self._settings
     if (!s || !s.reminderEnabled) {
@@ -114,10 +122,30 @@ export default {
     var intervalMs = (s.intervalMinutes || 60) * 60 * 1000
     if (now - self._lastReminderTime >= intervalMs) {
       self._lastReminderTime = now
-      console.log('[app] firing reminder')
+      console.log('[app] firing reminder at ' + new Date().toLocaleTimeString())
       vibrateTimes(3)
     }
   },
+
+  /**
+   * 外部可调用：设置变更后同步。
+   */
+  syncSettings(settings) {
+    this._settings = settings
+    console.log('[app] settings synced')
+  },
+
+  onDestroy() {
+    console.log('[app] destroyed, stopping loop')
+    this._loopRunning = false
+    if (this._loopTimer) {
+      clearInterval(this._loopTimer)
+      this._loopTimer = null
+    }
+  }
+}
+</script>
+
 
   /**
    * 外部可调用：设置变更后同步（设置页保存时由主页 onShow 间接触发，

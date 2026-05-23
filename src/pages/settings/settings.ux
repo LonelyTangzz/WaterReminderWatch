@@ -111,7 +111,7 @@ export default {
   goalUp() { this.goalMl = Math.min(5000, this.goalMl + 250); this.save() },
   goalDown() { this.goalMl = Math.max(500, this.goalMl - 250); this.save() },
   intvUp() { this.intervalMinutes = Math.min(240, this.intervalMinutes + 15); this.save() },
-  intvDown() { this.intervalMinutes = Math.max(15, this.intervalMinutes - 15); this.save() },
+  intvDown() { this.intervalMinutes = Math.max(1, this.intervalMinutes - 15); this.save() },
 
   toggleReminder() {
     this.reminderEnabled = !this.reminderEnabled

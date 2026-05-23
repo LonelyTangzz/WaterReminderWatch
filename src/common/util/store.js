@@ -92,7 +92,7 @@ export function getSettings() {
 export function setSettings(settings) {
   var normalized = {
     goalMl: clamp(settings.goalMl, 500, 5000),
-    intervalMinutes: clamp(settings.intervalMinutes, 15, 240),
+    intervalMinutes: clamp(settings.intervalMinutes, 1, 240),
     reminderEnabled: !!settings.reminderEnabled
   }
   return setItem(SETTINGS_KEY, JSON.stringify(normalized)).then(function () {
