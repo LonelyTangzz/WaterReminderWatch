@@ -1,37 +1,19 @@
 /**
  * 喝水提醒 Logo 生成器（零依赖，Node 原生）。
- *
- * 生成 128×128 RGBA PNG：简约水杯图标
- *   - 深色圆形底
- *   - 白色简约水杯（圆角杯身 + 把手）
- *   - 蓝色水面 + 波纹
- *   - 顶部水滴装饰
- *
+ * 输出 128×128 极简铃铛图标，透明背景贴合表盘。
  * 用法：node scripts/gen-logo.js
- * 输出：src/common/logo.png
  */
 var zlib = require('zlib')
 var fs = require('fs')
 var path = require('path')
 
-var W = 128
-var H = 128
-var CX = 64
-var CY = 64
-
+var W = 128, H = 128, CX = 64, CY = 64
 var pixels = Buffer.alloc(W * H * 4, 0)
 
-function setPixel(x, y, r, g, b, a) {
-  if (x < 0 || x >= W || y < 0 || y >= H) return
-  var i = (y * W + x) * 4
-  pixels[i] = r; pixels[i + 1] = g; pixels[i + 2] = b; pixels[i + 3] = a
-}
-
-function blendPixel(x, y, r, g, b, a) {
+function blend(x, y, r, g, b, a) {
   if (x < 0 || x >= W || y < 0 || y >= H || a === 0) return
   var i = (y * W + x) * 4
-  var sa = a / 255
-  var da = pixels[i + 3] / 255
+  var sa = a / 255, da = pixels[i + 3] / 255
   var oa = sa + da * (1 - sa)
   if (oa === 0) return
   pixels[i] = Math.round((r * sa + pixels[i] * da * (1 - sa)) / oa)
@@ -39,193 +21,82 @@ function blendPixel(x, y, r, g, b, a) {
   pixels[i + 2] = Math.round((b * sa + pixels[i + 2] * da * (1 - sa)) / oa)
   pixels[i + 3] = Math.round(oa * 255)
 }
-
-function lerp(a, b, t) { return a + (b - a) * t }
-function clamp(v, lo, hi) { return v < lo ? lo : v > hi ? hi : v }
 function dist(x1, y1, x2, y2) {
-  var dx = x1 - x2; var dy = y1 - y2
+  var dx = x1 - x2, dy = y1 - y2
   return Math.sqrt(dx * dx + dy * dy)
 }
 
-// ========================================
-// 圆形深色背景
-// ========================================
+// ========== 铃铛图标（透明背景，柔和蓝灰） ==========
+var bx = CX, by = CY - 4, br = 28
+
+// 铃铛圆顶
 for (var y = 0; y < H; y++) {
   for (var x = 0; x < W; x++) {
-    var d = dist(x, y, CX, CY)
-    if (d <= 59) {
-      var t = d / 59
-      setPixel(x, y,
-        Math.round(lerp(8, 22, t)),
-        Math.round(lerp(18, 32, t)),
-        Math.round(lerp(40, 52, t)),
-        255
-      )
+    var dx = x - bx, dy = y - by
+    if (dy <= 6) {
+      var d = Math.sqrt(dx * dx + (dy - 6) * (dy - 6)) / br
+      if (d < 1) blend(x, y, 140, 160, 180, Math.round((1 - d * d) * 180))
     }
   }
 }
 
-// ========================================
-// 水杯杯身（白色圆角矩形）
-// ========================================
-var cupL = 32
-var cupR = 96
-var cupT = 28
-var cupB = 90
-var cupRnd = 10
-
-function insideCupBody(x, y) {
-  if (x < cupL || x > cupR || y < cupT || y > cupB) return false
-  if (y < cupT + cupRnd) {
-    if (x < cupL + cupRnd && dist(x, y, cupL + cupRnd, cupT + cupRnd) > cupRnd) return false
-    if (x > cupR - cupRnd && dist(x, y, cupR - cupRnd, cupT + cupRnd) > cupRnd) return false
-  }
-  if (y > cupB - cupRnd) {
-    if (x < cupL + cupRnd && dist(x, y, cupL + cupRnd, cupB - cupRnd) > cupRnd) return false
-    if (x > cupR - cupRnd && dist(x, y, cupR - cupRnd, cupB - cupRnd) > cupRnd) return false
-  }
-  return true
-}
-
-// 杯身填充
-for (y = cupT; y <= cupB; y++) {
-  for (var x = cupL; x <= cupR; x++) {
-    if (insideCupBody(x, y)) {
-      blendPixel(x, y, 235, 242, 248, 255)
-    }
-  }
-}
-
-// ========================================
-// 水面（蓝色渐变，约55%高度）
-// ========================================
-var waterTop = 58
-
-for (y = waterTop; y <= cupB - cupRnd; y++) {
-  for (var x = cupL + cupRnd - 2; x <= cupR - cupRnd + 2; x++) {
-    if (!insideCupBody(x, y)) continue
-    var wt = (y - waterTop) / (cupB - cupRnd - waterTop)
-    wt = clamp(wt, 0, 1)
-    var wr = Math.round(lerp(100, 28, wt))
-    var wg = Math.round(lerp(200, 140, wt))
-    var wb = Math.round(lerp(252, 222, wt))
-    blendPixel(x, y, wr, wg, wb, 220)
-  }
-}
-
-// 水面波纹
-for (y = waterTop - 3; y <= waterTop + 3; y++) {
-  for (var x = cupL + 6; x <= cupR - 6; x++) {
-    if (!insideCupBody(x, y)) continue
-    var phase = (x - cupL) / (cupR - cupL) * Math.PI * 2.5
-    var waveY = waterTop + Math.sin(phase) * 3
-    if (Math.abs(y - waveY) < 2.5) {
-      var alpha = Math.round((1 - Math.abs(y - waveY) / 3) * 120)
-      blendPixel(x, y, 150, 225, 255, alpha)
-    }
-  }
-}
-
-// ========================================
-// 杯身左边缘高光
-// ========================================
-for (y = cupT + cupRnd + 2; y <= cupB - cupRnd - 2; y++) {
-  for (var dx = 0; dx < 4; dx++) {
-    var hx = cupL + cupRnd + dx
-    if (hx < cupR && insideCupBody(hx, y)) {
-      blendPixel(hx, y, 200, 220, 240, Math.round((1 - dx / 4) * 55))
-    }
-  }
-}
-
-// ========================================
-// 杯口描边
-// ========================================
-for (y = cupT - 1; y <= cupT + 1; y++) {
-  for (var x = cupL + cupRnd - 1; x <= cupR - cupRnd + 1; x++) {
-    if (insideCupBody(x, y)) {
-      blendPixel(x, y, 175, 195, 218, 180)
-    }
-  }
-}
-
-// ========================================
-// 把手（右侧弧形）
-// ========================================
-var handleCX = cupR + 8
-var handleCY = CY + 4
-var handleOuterR = 16
-var handleInnerR = 8
-
+// 铃铛下半部梯形
 for (y = 0; y < H; y++) {
   for (var x = 0; x < W; x++) {
-    var hd = dist(x, y, handleCX, handleCY)
-    if (hd >= handleInnerR && hd <= handleOuterR) {
-      if (x >= handleCX - 2 && y > cupT + 10 && y < cupB - 10) {
-        var ha = Math.round((1 - Math.abs(hd - 12) / 4) * 210)
-        blendPixel(x, y, 195, 212, 228, clamp(ha, 0, 255))
+    var dx2 = x - bx, dy2 = y - by
+    if (dy2 > 6 && dy2 < 26) {
+      var prog = (dy2 - 6) / 20
+      var halfW = br * (1 - prog * 0.55)
+      if (Math.abs(dx2) < halfW) {
+        var edgeDist = Math.abs(dx2) / halfW
+        blend(x, y, 130, 150, 175, Math.round((1 - edgeDist * edgeDist * 0.5) * 160))
       }
     }
   }
 }
 
-// ========================================
-// 顶部小水滴装饰
-// ========================================
-var dropCX = 60
-var dropCY = 15
-var dropR = 7
-
-function insideDrop(x, y) {
-  var dx = x - dropCX
-  var dy = y - dropCY
-  if (dy <= 2) return dx * dx + (dy - 2) * (dy - 2) <= dropR * dropR
-  var tipY = dropCY + 14
-  if (dy > tipY - dropCY) return false
-  var prog = (dy - 2) / (tipY - dropCY - 2)
-  var r = dropR * (1 - prog * prog * 0.9)
-  return Math.abs(dx) <= r
+// 底部横条
+for (y = by + 22; y <= by + 30; y++) {
+  for (var x = bx - br * 0.45; x <= bx + br * 0.45; x++) {
+    var bdy = Math.abs(y - by - 26) / 4
+    if (bdy < 1) blend(x, y, 150, 170, 195, Math.round((1 - bdy) * 170))
+  }
 }
 
-for (y = 0; y < H; y++) {
-  for (var x = 0; x < W; x++) {
-    if (insideDrop(x, y)) {
-      var dt = (y - dropCY + dropR) / (dropR * 2 + 12)
-      dt = clamp(dt, 0, 1)
-      var dr = Math.round(lerp(130, 50, dt))
-      var dg = Math.round(lerp(220, 160, dt))
-      var db = Math.round(lerp(252, 230, dt))
-      blendPixel(x, y, dr, dg, db, 230)
+// 内部镂空竖线
+for (y = by + 18; y <= by + 24; y++) {
+  for (var x = bx - 4; x <= bx + 4; x++) {
+    blend(x, y, 0, 0, 0, 60)
+  }
+}
+
+// 顶部圆钮
+for (y = by - br - 6; y <= by - br + 2; y++) {
+  for (var x = bx - 5; x <= bx + 5; x++) {
+    var td = dist(x, y, bx, by - br - 1)
+    if (td < 4.5) blend(x, y, 160, 180, 200, Math.round((1 - td / 4.5) * 180))
+  }
+}
+
+// 高光
+for (y = by - br + 2; y <= by + 4; y++) {
+  for (var x = bx - br + 6; x <= bx - 4; x++) {
+    var hd = dist(x, y, bx - 10, by - 6)
+    if (hd < 14 && x > bx - br + 2 && y < by + 8) {
+      blend(x, y, 200, 215, 230, Math.round((1 - hd / 14) * 50))
     }
   }
 }
 
-// 水滴高光
-for (y = dropCY - 4; y <= dropCY; y++) {
-  for (var x = dropCX - 3; x <= dropCX + 1; x++) {
-    var hld = dist(x, y, dropCX - 1, dropCY - 2)
-    if (hld < 4 && insideDrop(x, y)) {
-      blendPixel(x, y, 200, 240, 255, Math.round((1 - hld / 4) * 120))
-    }
+// 铃舌小球
+for (y = by + 27; y <= by + 33; y++) {
+  for (var x = bx - 3; x <= bx + 3; x++) {
+    var bd = dist(x, y, bx, by + 30)
+    if (bd < 3.5) blend(x, y, 140, 160, 185, Math.round((1 - bd / 3.5) * 170))
   }
 }
 
-// ========================================
-// 外圈圆环描边
-// ========================================
-for (y = 0; y < H; y++) {
-  for (var x = 0; x < W; x++) {
-    var d2 = dist(x, y, CX, CY)
-    if (d2 > 56 && d2 < 61) {
-      var aa = Math.round((1 - Math.abs(d2 - 58.5) / 2.5) * 155)
-      blendPixel(x, y, 80, 160, 220, aa)
-    }
-  }
-}
-
-// ========================================
-// PNG 输出
-// ========================================
+// ========== PNG 输出 ==========
 function crc32(buf) {
   var table = []
   for (var n = 0; n < 256; n++) {
@@ -237,7 +108,6 @@ function crc32(buf) {
   for (var i = 0; i < buf.length; i++) crc = table[(crc ^ buf[i]) & 0xFF] ^ (crc >>> 8)
   return (crc ^ 0xFFFFFFFF) >>> 0
 }
-
 function pngChunk(type, data) {
   var len = Buffer.alloc(4); len.writeUInt32BE(data.length, 0)
   var tb = Buffer.from(type, 'ascii')
@@ -247,25 +117,17 @@ function pngChunk(type, data) {
 
 var rows = []
 for (y = 0; y < H; y++) {
-  var row = Buffer.alloc(1 + W * 4)
-  row[0] = 0
+  var row = Buffer.alloc(1 + W * 4); row[0] = 0
   pixels.copy(row, 1, y * W * 4, (y + 1) * W * 4)
   rows.push(row)
 }
-
 var sig = Buffer.from([137, 80, 78, 71, 13, 10, 26, 10])
 var ihdr = Buffer.alloc(13)
 ihdr.writeUInt32BE(W, 0); ihdr.writeUInt32BE(H, 4)
 ihdr[8] = 8; ihdr[9] = 6; ihdr[10] = 0; ihdr[11] = 0; ihdr[12] = 0
 
-var out = Buffer.concat([
-  sig,
-  pngChunk('IHDR', ihdr),
-  pngChunk('IDAT', zlib.deflateSync(Buffer.concat(rows))),
-  pngChunk('IEND', Buffer.alloc(0))
-])
-
+var out = Buffer.concat([sig, pngChunk('IHDR', ihdr), pngChunk('IDAT', zlib.deflateSync(Buffer.concat(rows))), pngChunk('IEND', Buffer.alloc(0))])
 var outPath = path.join(__dirname, '..', 'src', 'common', 'logo.png')
 fs.writeFileSync(outPath, out)
-console.log('✅ Logo generated: ' + outPath)
-console.log('   Size: ' + out.length + ' bytes')
+fs.writeFileSync(path.join(__dirname, '..', 'src', 'common', 'logo_visible.png'), out)
+console.log('✅ Bell logo: ' + outPath + ' (' + out.length + ' bytes)')
