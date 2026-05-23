@@ -17,7 +17,7 @@ import fetch from '@system.fetch'
 import { getSettings } from './common/util/store.js'
 import { isQuietTime, fireReminder } from './common/util/reminder.js'
 
-var HEARTBEAT_SEC = 10
+var HEARTBEAT_SEC = 30
 
 export default {
   onCreate() {

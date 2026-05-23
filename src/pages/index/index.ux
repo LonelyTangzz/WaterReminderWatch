@@ -1,21 +1,25 @@
 <!--
   喝水提醒主页（Xiaomi Watch S4 圆表，466 圆屏，designWidth 480）。
-  - 顶部：当前饮水量 / 目标 / 完成百分比
-  - 中部：三档快捷加水 150 / 250 / 500
+  - 顶部：当前饮水量 / 目标 / 百分比
+  - 进度条：可视化完成度
+  - 中部：三档快捷加水（可在设置页自定义水量）
   - 底部：历史 · 设置 导航
-  提醒：onShow 按设置启动前台定时器（仅 app 打开时有效，平台不开放后台）。
 -->
 <template>
   <div class="page">
     <div class="hero">
       <text class="amount">{{ totalMl }}</text>
       <text class="unit">/ {{ goalMl }}ml · {{ percent }}%</text>
+      <!-- 进度条 -->
+      <div class="progress-bar">
+        <div class="progress-fill" style="width:{{ percent }}%"></div>
+      </div>
     </div>
 
     <div class="cup-row">
-      <div class="cup cup-s" onclick="addSmall"><text class="cup-label">150</text></div>
-      <div class="cup cup-m" onclick="addMedium"><text class="cup-label">250</text></div>
-      <div class="cup cup-l" onclick="addLarge"><text class="cup-label">500</text></div>
+      <div class="cup cup-s" onclick="addSmall"><text class="cup-label">{{ cup1 }}</text></div>
+      <div class="cup cup-m" onclick="addMedium"><text class="cup-label">{{ cup2 }}</text></div>
+      <div class="cup cup-l" onclick="addLarge"><text class="cup-label">{{ cup3 }}</text></div>
     </div>
 
     <div class="nav-row">
@@ -39,32 +43,47 @@
 .hero {
   flex-direction: column;
   align-items: center;
-  margin-bottom: 24px;
+  margin-bottom: 20px;
 }
 
 .amount {
-  font-size: 110px;
+  font-size: 96px;
   color: #4FC3F7;
   font-weight: bold;
 }
 
 .unit {
-  font-size: 30px;
+  font-size: 28px;
   color: #AAAAAA;
-  margin-top: 4px;
+  margin-top: 2px;
+}
+
+.progress-bar {
+  width: 260px;
+  height: 8px;
+  background-color: #1A1A1A;
+  border-radius: 4px;
+  margin-top: 12px;
+}
+
+.progress-fill {
+  height: 8px;
+  background-color: #4FC3F7;
+  border-radius: 4px;
 }
 
 .cup-row {
   flex-direction: row;
   justify-content: center;
+  margin-top: 10px;
 }
 
 .cup {
-  width: 116px;
-  height: 80px;
-  margin-left: 8px;
-  margin-right: 8px;
-  border-radius: 40px;
+  width: 100px;
+  height: 72px;
+  margin-left: 6px;
+  margin-right: 6px;
+  border-radius: 36px;
   justify-content: center;
   align-items: center;
 }
@@ -75,40 +94,34 @@
 
 .cup-label {
   color: #FFFFFF;
-  font-size: 36px;
+  font-size: 30px;
   font-weight: bold;
 }
 
 .nav-row {
   flex-direction: row;
   align-items: center;
-  margin-top: 32px;
+  margin-top: 24px;
 }
 
 .nav-link {
   color: #81D4FA;
-  font-size: 30px;
-  padding-left: 20px;
-  padding-right: 20px;
+  font-size: 28px;
+  padding-left: 18px;
+  padding-right: 18px;
 }
 
 .nav-dot {
   color: #555555;
-  font-size: 30px;
+  font-size: 28px;
 }
 </style>
 
 <script>
 /**
  * 主页脚本。
- * 数据来自 common/util/store.js（settings + today）。
- *
- * 提醒由 app.ux 统一管理（后台心跳 + 提醒调度），页面只负责：
- *   1. 显示当日饮水进度
- *   2. 快捷加水（三档）
- *   3. 导航到历史/设置
- *
- * onShow 刷新 UI；设置变更后从设置页返回时，onShow 自动拉取最新数据。
+ * 数据来自 store.js（settings + today）。
+ * 提醒由 app.ux 统一管理。
  */
 import router from '@system.router'
 import prompt from '@system.prompt'
@@ -118,36 +131,42 @@ export default {
   private: {
     totalMl: 0,
     goalMl: 2000,
-    percent: 0
+    percent: 0,
+    cup1: 150,
+    cup2: 250,
+    cup3: 500
   },
 
   onShow() {
     this.refresh()
   },
 
-  /** 从存储拉取 settings + today，刷新 hero 区。 */
   refresh() {
+    var self = this
     return Promise.all([getSettings(), getToday()]).then((arr) => {
       var settings = arr[0]
       var today = arr[1]
-      this.goalMl = settings.goalMl
-      this.totalMl = today.totalMl
-      this.percent = this.goalMl > 0
-        ? Math.min(100, Math.round(100 * this.totalMl / this.goalMl))
+      self.goalMl = settings.goalMl
+      self.totalMl = today.totalMl
+      self.percent = self.goalMl > 0
+        ? Math.min(100, Math.round(100 * self.totalMl / self.goalMl))
         : 0
+      // 读取自定义杯量（缺省用默认值）
+      self.cup1 = settings.cup1Ml || 150
+      self.cup2 = settings.cup2Ml || 250
+      self.cup3 = settings.cup3Ml || 500
     })
   },
 
-  addSmall() { this._add(150) },
-  addMedium() { this._add(250) },
-  addLarge() { this._add(500) },
+  addSmall() { this._add(this.cup1) },
+  addMedium() { this._add(this.cup2) },
+  addLarge() { this._add(this.cup3) },
 
   _add(ml) {
     var self = this
     addIntake(ml).then(() => {
       self.refresh()
       prompt.showToast({ message: '+' + ml + ' ml', duration: 0 })
-      // 喝水后重置提醒倒计时：已手动补水，下次提醒从此刻起算
       try {
         if (self.$app && typeof self.$app.resetReminderTimer === 'function') {
           self.$app.resetReminderTimer()
@@ -159,12 +178,7 @@ export default {
     })
   },
 
-  openHistory() {
-    router.push({ uri: '/pages/history' })
-  },
-
-  openSettings() {
-    router.push({ uri: '/pages/settings' })
-  }
+  openHistory() { router.push({ uri: '/pages/history' }) },
+  openSettings() { router.push({ uri: '/pages/settings' }) }
 }
 </script>

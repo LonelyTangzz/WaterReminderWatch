@@ -1,6 +1,5 @@
 <!--
-  设置页：每日目标 / 提醒间隔 / 提醒开关 / 清空今日。
-  Vela 对相邻 if 指令渲染异常，这里一律用三元表达式绑定，避免 if/for。
+  设置页：每日目标 / 提醒间隔 / 快捷杯量 / 提醒开关 / 清空今日。
 -->
 <template>
   <div class="page">
@@ -16,8 +15,29 @@
     <div class="row">
       <text class="label">间隔</text>
       <text class="step-btn" onclick="intvDown">−</text>
-      <text class="step-val">{{ intervalMinutes }}</text>
+      <text class="step-val">{{ intervalMinutes }}m</text>
       <text class="step-btn" onclick="intvUp">+</text>
+    </div>
+
+    <div class="row">
+      <text class="label">小杯</text>
+      <text class="step-btn" onclick="cup1Down">−</text>
+      <text class="step-val">{{ cup1Ml }}</text>
+      <text class="step-btn" onclick="cup1Up">+</text>
+    </div>
+
+    <div class="row">
+      <text class="label">中杯</text>
+      <text class="step-btn" onclick="cup2Down">−</text>
+      <text class="step-val">{{ cup2Ml }}</text>
+      <text class="step-btn" onclick="cup2Up">+</text>
+    </div>
+
+    <div class="row">
+      <text class="label">大杯</text>
+      <text class="step-btn" onclick="cup3Down">−</text>
+      <text class="step-val">{{ cup3Ml }}</text>
+      <text class="step-btn" onclick="cup3Up">+</text>
     </div>
 
     <div class="row">
@@ -80,7 +100,10 @@ export default {
   private: {
     goalMl: 2000,
     intervalMinutes: 60,
-    reminderEnabled: true
+    reminderEnabled: true,
+    cup1Ml: 150,
+    cup2Ml: 250,
+    cup3Ml: 500
   },
 
   onInit() {
@@ -88,6 +111,9 @@ export default {
       this.goalMl = s.goalMl
       this.intervalMinutes = s.intervalMinutes
       this.reminderEnabled = s.reminderEnabled
+      this.cup1Ml = s.cup1Ml || 150
+      this.cup2Ml = s.cup2Ml || 250
+      this.cup3Ml = s.cup3Ml || 500
     })
   },
 
@@ -96,19 +122,30 @@ export default {
     return setSettings({
       goalMl: self.goalMl,
       intervalMinutes: self.intervalMinutes,
-      reminderEnabled: self.reminderEnabled
+      reminderEnabled: self.reminderEnabled,
+      cup1Ml: self.cup1Ml,
+      cup2Ml: self.cup2Ml,
+      cup3Ml: self.cup3Ml
     }).then((saved) => {
       self.goalMl = saved.goalMl
       self.intervalMinutes = saved.intervalMinutes
       self.reminderEnabled = saved.reminderEnabled
-      // app.ux 每次心跳实时读 storage，无需手动推送
+      self.cup1Ml = saved.cup1Ml
+      self.cup2Ml = saved.cup2Ml
+      self.cup3Ml = saved.cup3Ml
     })
   },
 
   goalUp() { this.goalMl = Math.min(5000, this.goalMl + 250); this.save() },
   goalDown() { this.goalMl = Math.max(500, this.goalMl - 250); this.save() },
   intvUp() { this.intervalMinutes = Math.min(240, this.intervalMinutes + 15); this.save() },
-  intvDown() { this.intervalMinutes = Math.max(1, this.intervalMinutes - 15); this.save() },
+  intvDown() { this.intervalMinutes = Math.max(15, this.intervalMinutes - 15); this.save() },
+  cup1Up() { this.cup1Ml = Math.min(1000, this.cup1Ml + 50); this.save() },
+  cup1Down() { this.cup1Ml = Math.max(50, this.cup1Ml - 50); this.save() },
+  cup2Up() { this.cup2Ml = Math.min(1000, this.cup2Ml + 50); this.save() },
+  cup2Down() { this.cup2Ml = Math.max(50, this.cup2Ml - 50); this.save() },
+  cup3Up() { this.cup3Ml = Math.min(1000, this.cup3Ml + 50); this.save() },
+  cup3Down() { this.cup3Ml = Math.max(50, this.cup3Ml - 50); this.save() },
 
   toggleReminder() {
     this.reminderEnabled = !this.reminderEnabled

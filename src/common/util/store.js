@@ -19,11 +19,14 @@ import storage from '@system.storage'
 var SETTINGS_KEY = 'wr_settings_v1'
 var TODAY_KEY = 'wr_today_v1'
 
-/** 默认设置：每日 2000ml / 每 60 分钟提醒 / 提醒开启。 */
+/** 默认设置：每日 2000ml / 每 60 分钟提醒 / 提醒开启 / 三档杯量。 */
 export var DEFAULT_SETTINGS = {
   goalMl: 2000,
   intervalMinutes: 60,
-  reminderEnabled: true
+  reminderEnabled: true,
+  cup1Ml: 150,
+  cup2Ml: 250,
+  cup3Ml: 500
 }
 
 /**
@@ -113,10 +116,12 @@ export function getSettings() {
 export function setSettings(settings) {
   var normalized = {
     goalMl: clamp(settings.goalMl, 500, 5000),
-    intervalMinutes: clamp(settings.intervalMinutes, 1, 240),
-    reminderEnabled: !!settings.reminderEnabled
+    intervalMinutes: clamp(settings.intervalMinutes, 15, 240),
+    reminderEnabled: !!settings.reminderEnabled,
+    cup1Ml: clamp(settings.cup1Ml || 150, 50, 1000),
+    cup2Ml: clamp(settings.cup2Ml || 250, 50, 1000),
+    cup3Ml: clamp(settings.cup3Ml || 500, 50, 1000)
   }
-  // 立即更新缓存，让 app.ux 同步读到最新值
   _settingsCache = normalized
   return setItem(SETTINGS_KEY, JSON.stringify(normalized)).then(function () {
     return normalized
@@ -184,13 +189,16 @@ function shallowCopy(obj) {
   return out
 }
 
-/** 用默认值填充 parsed 中缺失的字段，避免 spread 语法。 */
+/** 用默认值填充 parsed 中缺失的字段。 */
 function mergeSettings(parsed) {
   var out = shallowCopy(DEFAULT_SETTINGS)
   if (parsed && typeof parsed === 'object') {
     if (typeof parsed.goalMl === 'number') out.goalMl = parsed.goalMl
     if (typeof parsed.intervalMinutes === 'number') out.intervalMinutes = parsed.intervalMinutes
     if (typeof parsed.reminderEnabled === 'boolean') out.reminderEnabled = parsed.reminderEnabled
+    if (typeof parsed.cup1Ml === 'number') out.cup1Ml = parsed.cup1Ml
+    if (typeof parsed.cup2Ml === 'number') out.cup2Ml = parsed.cup2Ml
+    if (typeof parsed.cup3Ml === 'number') out.cup3Ml = parsed.cup3Ml
   }
   return out
 }
