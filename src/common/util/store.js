@@ -19,14 +19,15 @@ import storage from '@system.storage'
 var SETTINGS_KEY = 'wr_settings_v1'
 var TODAY_KEY = 'wr_today_v1'
 
-/** 默认设置：每日 2000ml / 每 60 分钟提醒 / 提醒开启 / 三档杯量。 */
+/** 默认设置：每日 2000ml / 每 60 分钟提醒 / 提醒开启 / 三档杯量 / 中文。 */
 export var DEFAULT_SETTINGS = {
   goalMl: 2000,
   intervalMinutes: 60,
   reminderEnabled: true,
   cup1Ml: 150,
   cup2Ml: 250,
-  cup3Ml: 500
+  cup3Ml: 500,
+  locale: 'zh-CN'
 }
 
 /**
@@ -120,7 +121,8 @@ export function setSettings(settings) {
     reminderEnabled: !!settings.reminderEnabled,
     cup1Ml: clamp(settings.cup1Ml || 150, 50, 1000),
     cup2Ml: clamp(settings.cup2Ml || 250, 50, 1000),
-    cup3Ml: clamp(settings.cup3Ml || 500, 50, 1000)
+    cup3Ml: clamp(settings.cup3Ml || 500, 50, 1000),
+    locale: settings.locale === 'en' ? 'en' : 'zh-CN'
   }
   _settingsCache = normalized
   return setItem(SETTINGS_KEY, JSON.stringify(normalized)).then(function () {
@@ -199,6 +201,7 @@ function mergeSettings(parsed) {
     if (typeof parsed.cup1Ml === 'number') out.cup1Ml = parsed.cup1Ml
     if (typeof parsed.cup2Ml === 'number') out.cup2Ml = parsed.cup2Ml
     if (typeof parsed.cup3Ml === 'number') out.cup3Ml = parsed.cup3Ml
+    if (typeof parsed.locale === 'string') out.locale = parsed.locale
   }
   return out
 }

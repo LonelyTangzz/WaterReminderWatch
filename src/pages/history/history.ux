@@ -4,10 +4,10 @@
 -->
 <template>
   <div class="page">
-    <text class="head-total">今日 {{ totalMl }} ml</text>
-    <text class="head-sub">共 {{ count }} 次</text>
+    <text class="head-total">{{ tToday }} {{ totalMl }} ml</text>
+    <text class="head-sub">{{ tTimes }} {{ count }} </text>
 
-    <text class="empty">{{ count === 0 ? '今天还没有记录' : '' }}</text>
+    <text class="empty">{{ count === 0 ? tNoRecord : '' }}</text>
 
     <div class="list-area">
       <div class="entry" for="{{ rows }}">
@@ -16,7 +16,7 @@
       </div>
     </div>
 
-    <text class="b" onclick="goBack">返回</text>
+    <text class="b" onclick="goBack">{{ tBack }}</text>
   </div>
 </template>
 
@@ -53,25 +53,34 @@
 <script>
 import router from '@system.router'
 import { getToday } from '../../common/util/store.js'
+import { t } from '../../common/util/i18n.js'
 
 export default {
   private: {
     totalMl: 0,
     count: 0,
-    rows: []
+    rows: [],
+    tToday: '今日',
+    tTimes: '次',
+    tNoRecord: '今天还没有记录',
+    tBack: '返回'
   },
 
   onShow() {
+    var self = this
     getToday().then((today) => {
-      this.totalMl = today.totalMl
+      self.totalMl = today.totalMl
       var entries = today.entries || []
-      this.count = entries.length
+      self.count = entries.length
       var rows = []
-      // 倒序取最近20条
       for (var i = entries.length - 1; i >= 0 && rows.length < 20; i--) {
         rows.push({ time: formatTime(entries[i].t), ml: entries[i].ml })
       }
-      this.rows = rows
+      self.rows = rows
+      self.tToday = t('today')
+      self.tTimes = t('times')
+      self.tNoRecord = t('noRecord')
+      self.tBack = t('back')
     })
   },
 
