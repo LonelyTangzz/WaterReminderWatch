@@ -1,5 +1,55 @@
 # CHANGELOG
 
+## 2026-05-23 — 后台保活突破 + 全功能完善（最终版）
+
+### 🎉 核心突破：fetch 回调链后台保活
+
+经过 5 轮迭代（setInterval → fetch+setInterval → 异步存储轮询 → 模块缓存 → fetch回调+$app直接控制），最终 **fetch 回调自循环方案在 Watch S4 实机上验证通过**——退后台仍能定时震动 + toast。
+
+| 版本 | 方案 | 结果 |
+|------|------|------|
+| v1 | `setInterval` | ❌ JS 线程冻结 |
+| v2 | fetch 回调链 + setInterval 兜底 | ✅ 震动通过（首次） |
+| v3 | fetch 回调链 + 每次心跳异步读存储 | ❌ Promise 后台可能断链 |
+| v4 | 模块级同步缓存 `getSettingsCached()` | ❌ QuickJS 模块不跨组件共享 |
+| v5 | **fetch 回调链 + `$app._stopLoop/_startLoop` 直接控制 + 存储兜底** | ✅ 最终方案 |
+
+### ✅ 完整功能清单
+
+- [feat] **后台保活**：[src/app.ux](src/app.ux) fetch 回调自循环，10s 心跳，搭载提醒检查
+- [feat] **花样提醒语**：[src/common/util/reminder.js](src/common/util/reminder.js) 30 条随机轮播（可爱/科普/毒舌/励志/日常 5 类），每次不重复
+- [feat] **提醒开关**：设置页关 → `$app._stopLoop()` 停循环停震动；开 → `$app._startLoop()` 恢复
+- [feat] **喝水重置**：[src/pages/index/index.ux](src/pages/index/index.ux) 加水后 `$app.resetReminderTimer()` 重置倒计时
+- [feat] **手机伴侣**：[phone-companion/index.html](phone-companion/index.html) 独立网页版备用
+- [feat] **新 Logo**：透明背景水杯（APP 列表好看 + 表盘不突兀），[scripts/gen-logo.js](scripts/gen-logo.js) 零依赖生成
+
+### 🔧 修复与清理
+
+- [fix] 前台提醒从未接入（`index.ux` `onShow` 只刷新 UI）→ 5 轮迭代后由 `app.ux` 统一调度
+- [fix] `_lastReminderTime` 初始值 0 导致首次立即触发 → 改为 `Date.now()`
+- [fix] 提醒关闭后 Logo 不消失 → 确认 S4 系统强制行为（声明 background feature = Logo 必显），优化 Logo 设计降低视觉干扰
+- [chore] 移除无效后台保活代码（`system.audio` / `startKeepAlive` / `stopKeepAlive`）
+- [chore] 移除 `$app.syncSettings` 间接调用，改为直接 `$app._stopLoop/_startLoop`
+
+### 📝 文档更新
+
+- [docs] [TODO.md](TODO.md) 全面翻新：已完成功能 / 待开发 / 已知限制 / 技术债务
+- [docs] [README.md](README.md) 更新保活结论、API 表格、手机伴侣章节
+- [docs] [CHANGELOG.md](CHANGELOG.md) 完整记录 5 轮保活迭代 + 全部功能变更
+
+### 🏷️ 最终状态
+
+- 后台提醒：✅ 可用（fetch 回调链 + 10s 心跳）
+- 提醒开关：✅ 生效（关即停震动，开即恢复）
+- 花样提醒：✅ 30 条随机
+- 喝水重置：✅ 加水后重新计时
+- Logo：✅ 透明背景水杯
+- 手机备用：✅ phone-companion
+
+### ⚠️ 待转为正式版
+
+测试期参数（心跳 10s、间隔下限 1min）需在稳定后恢复正式值（心跳 30s、间隔下限 15min）。
+
 ## 2026-05-23 — system.request 保活实测结论：❌ S4 仍冻结 + 新 Logo
 
 **保活最终结论（实机验证）：**
