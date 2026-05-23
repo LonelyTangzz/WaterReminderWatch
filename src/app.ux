@@ -2,19 +2,19 @@
 /**
  * 应用入口 — 后台保活 + 提醒调度中心。
  *
- * === 保活策略 v4（2026-05-23） ===
+ * === 保活策略 v5（2026-05-23） ===
  *
- * v3 异步读存储方案在 QuickJS 下可能有时序问题（Logo不消/关不掉）。
- * v4 改用模块级同步缓存：store.js 的 setSettings 写入时同步更新
- * _settingsCache，app.ux 通过 getSettingsCached() 零延迟读取。
+ * fetch 回调自循环（已验证可行：退后台仍能震动）。
+ * 设置变更由 settings.ux 通过 $app._startLoop() / $app._stopLoop() 直接控制。
  *
  * 流程：
- *   1. 设置页关提醒 → setSettings() 同步写 _settingsCache
- *   2. ≤10s 后 fetch 回调 → getSettingsCached() 读到 false → _stopLoop()
- *   3. _stopLoop() → _loopRunning=false → fetch 链断 → Logo 消失
+ *   1. fetch(delay/10) → 回调链自循环（不依赖 JS 定时器）
+ *   2. 检查间隔 + 睡眠免打扰 → 震动 + toast
+ *   3. 设置页关提醒 → $app._stopLoop() → 循环停 → Logo 消
+ *   4. 设置页开提醒 → $app._startLoop() → 重启循环
  */
 import fetch from '@system.fetch'
-import { getSettings, getSettingsCached } from './common/util/store.js'
+import { getSettings } from './common/util/store.js'
 import { isQuietTime, fireReminder } from './common/util/reminder.js'
 
 var HEARTBEAT_SEC = 10
@@ -26,29 +26,33 @@ export default {
     self._lastReminderTime = 0
     self._loopRunning = false
     self._loopTimer = null
+    self._settings = null
 
-    // 首次启动：读存储填充缓存 → 按需启动
-    getSettings().then(function (settings) {
-      console.log('[app] init settings, enabled=' + settings.reminderEnabled)
-      if (settings.reminderEnabled) self._startLoop()
-    }).catch(function (err) {
-      console.warn('[app] init fail', err)
+    getSettings().then(function (s) {
+      self._settings = s
+      console.log('[app] init, enabled=' + s.reminderEnabled)
+      if (s.reminderEnabled) self._startLoop()
+    }).catch(function (e) {
+      console.warn('[app] init fail', e)
     })
   },
 
+  /** 公开：设置页开启提醒时调用。 */
   _startLoop() {
     var self = this
     self._stopLoop()
     self._loopRunning = true
 
+    // 兜底定时器（前台时也检查）
     self._loopTimer = setInterval(function () {
-      if (self._loopRunning) self._checkAndMaybeStop()
+      if (self._loopRunning) self._check()
     }, HEARTBEAT_SEC * 1000)
 
     self._scheduleNext()
     console.log('[app] loop started')
   },
 
+  /** 公开：设置页关闭提醒时调用。停循环 → system.request 停 → Logo 消失。 */
   _stopLoop() {
     this._loopRunning = false
     if (this._loopTimer) { clearInterval(this._loopTimer); this._loopTimer = null }
@@ -59,40 +63,52 @@ export default {
     var self = this
     if (!self._loopRunning) return
 
-    fetch.fetch({
-      url: 'http://httpbin.org/delay/' + HEARTBEAT_SEC,
-      method: 'GET',
-      responseType: 'text',
-      success: function () {
-        self._checkAndMaybeStop()
-        if (self._loopRunning) self._scheduleNext()
-      },
-      fail: function () {
-        self._checkAndMaybeStop()
-        if (self._loopRunning) setTimeout(function () { self._scheduleNext() }, 2000)
-      }
+    // 每次发起 fetch 前也重新读一下存储中的设置（兜底）
+    getSettings().then(function (s) {
+      self._settings = s
+      if (!s.reminderEnabled) { self._stopLoop(); return }
+
+      fetch.fetch({
+        url: 'http://httpbin.org/delay/' + HEARTBEAT_SEC,
+        method: 'GET',
+        responseType: 'text',
+        success: function () {
+          self._check()
+          if (self._loopRunning) self._scheduleNext()
+        },
+        fail: function () {
+          self._check()
+          if (self._loopRunning) setTimeout(function () { self._scheduleNext() }, 2000)
+        }
+      })
+    }).catch(function () {
+      // 读存储失败不影响循环
+      if (!self._loopRunning) return
+      fetch.fetch({
+        url: 'http://httpbin.org/delay/' + HEARTBEAT_SEC,
+        method: 'GET',
+        responseType: 'text',
+        success: function () {
+          self._check()
+          if (self._loopRunning) self._scheduleNext()
+        },
+        fail: function () {
+          self._check()
+          if (self._loopRunning) setTimeout(function () { self._scheduleNext() }, 2000)
+        }
+      })
     })
   },
 
-  /**
-   * 同步检查（v4 核心改动：不读存储，直接读模块缓存）。
-   * 设置页 setSettings 时同步写缓存，这里零延迟读到最新值。
-   */
-  _checkAndMaybeStop() {
-    var s = getSettingsCached()
-    if (!s || !s.reminderEnabled) {
-      console.log('[app] reminder disabled (cached), stopping')
-      this._stopLoop()
-      return
-    }
-
-    if (isQuietTime()) return
+  _check() {
+    var s = this._settings
+    if (!s || !s.reminderEnabled || isQuietTime()) return
 
     var now = Date.now()
     var intervalMs = (s.intervalMinutes || 60) * 60 * 1000
     if (now - this._lastReminderTime >= intervalMs) {
       this._lastReminderTime = now
-      console.log('[app] firing at ' + new Date().toLocaleTimeString())
+      console.log('[app] firing')
       fireReminder()
     }
   },

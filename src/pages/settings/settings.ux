@@ -112,8 +112,19 @@ export default {
 
   toggleReminder() {
     this.reminderEnabled = !this.reminderEnabled
+    var self = this
     this.save().then(() => {
-      prompt.showToast({ message: this.reminderEnabled ? '提醒已开启' : '提醒已关闭', duration: 0 })
+      prompt.showToast({ message: self.reminderEnabled ? '提醒已开启' : '提醒已关闭', duration: 0 })
+      // 直接操作 app 实例启停后台循环（不依赖模块缓存/存储轮询）
+      try {
+        if (self.reminderEnabled && self.$app && typeof self.$app._startLoop === 'function') {
+          self.$app._startLoop()
+        } else if (!self.reminderEnabled && self.$app && typeof self.$app._stopLoop === 'function') {
+          self.$app._stopLoop()
+        }
+      } catch (e) {
+        console.warn('[settings] $app call fail', e)
+      }
     })
   },
 
