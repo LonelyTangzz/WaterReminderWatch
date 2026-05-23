@@ -23,9 +23,9 @@
     </div>
 
     <div class="nav-row">
-      <text class="nav-link" onclick="openHistory">历史</text>
-      <text class="nav-dot">·</text>
-      <text class="nav-link" onclick="openSettings">设置</text>
+      <text class="nav-link" onclick="openHistory">{{ tHistory }}</text>
+      <text class="nav-dot">.</text>
+      <text class="nav-link" onclick="openSettings">{{ tSettings }}</text>
     </div>
   </div>
 </template>
@@ -126,6 +126,7 @@
 import router from '@system.router'
 import prompt from '@system.prompt'
 import { getSettings, getToday, addIntake } from '../../common/util/store.js'
+import { t } from '../../common/util/i18n.js'
 
 export default {
   private: {
@@ -134,7 +135,9 @@ export default {
     percent: 0,
     cup1: 150,
     cup2: 250,
-    cup3: 500
+    cup3: 500,
+    tHistory: '历史',
+    tSettings: '设置'
   },
 
   onShow() {
@@ -155,6 +158,8 @@ export default {
       self.cup1 = settings.cup1Ml || 150
       self.cup2 = settings.cup2Ml || 250
       self.cup3 = settings.cup3Ml || 500
+      self.tHistory = t('history')
+      self.tSettings = t('settings')
     })
   },
 
