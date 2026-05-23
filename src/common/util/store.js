@@ -5,8 +5,9 @@
  * 领域对象级别的读写：`settings`（用户设置）、`today`（当日累计与记录）。
  *
  * 存储布局：
- *   settings = { goalMl, intervalMinutes, reminderEnabled }
+ *   settings = { goalMl, intervalMinutes, reminderEnabled, cup1Ml, cup2Ml, cup3Ml, locale }
  *   today    = { dateKey: "yyyy-MM-dd", totalMl, entries: [{t: timestamp, ml: number}] }
+ *   history  = { "yyyy-MM-dd": { totalMl, entries: [...] }, ... }  ← 最多30天
  *
  * 跨天自动重置：读 `today` 时，若存储中的 dateKey 与当前系统日期不符，返回一个空快照
  *（不落盘，等下一次 addIntake 时由 put 操作真正重置）。
@@ -18,6 +19,8 @@ import storage from '@system.storage'
 
 var SETTINGS_KEY = 'wr_settings_v1'
 var TODAY_KEY = 'wr_today_v1'
+var HISTORY_KEY = 'wr_history_v1'
+var MAX_HISTORY_DAYS = 30
 
 /** 默认设置：每日 2000ml / 每 60 分钟提醒 / 提醒开启 / 三档杯量 / 中文。 */
 export var DEFAULT_SETTINGS = {
@@ -162,7 +165,11 @@ export function addIntake(ml) {
   return getToday().then(function (state) {
     state.totalMl += ml
     state.entries.push({ t: Date.now(), ml: ml })
-    return setItem(TODAY_KEY, JSON.stringify(state)).then(function () { return state })
+    return setItem(TODAY_KEY, JSON.stringify(state)).then(function () {
+      // 同时归档到历史（同一事务内）
+      archiveToday()
+      return state
+    })
   })
 }
 
@@ -170,6 +177,83 @@ export function addIntake(ml) {
 export function resetToday() {
   var fresh = { dateKey: todayKey(), totalMl: 0, entries: [] }
   return setItem(TODAY_KEY, JSON.stringify(fresh)).then(function () { return fresh })
+}
+
+/**
+ * 读取历史记录（最近 N 天）。
+ * @returns {Promise<Array<{dateKey:string, totalMl:number, entries:Array}>>}
+ */
+export function getHistory() {
+  return getItem(HISTORY_KEY).then(function (raw) {
+    if (!raw) return []
+    try {
+      var parsed = JSON.parse(raw)
+      var days = []
+      for (var k in parsed) {
+        if (Object.prototype.hasOwnProperty.call(parsed, k)) {
+          days.push({
+            dateKey: k,
+            totalMl: parsed[k].totalMl || 0,
+            entries: Array.isArray(parsed[k].entries) ? parsed[k].entries : []
+          })
+        }
+      }
+      // 按日期降序排列（最新在前）
+      days.sort(function (a, b) { return a.dateKey < b.dateKey ? 1 : -1 })
+      return days.slice(0, MAX_HISTORY_DAYS)
+    } catch (e) {
+      return []
+    }
+  })
+}
+
+/**
+ * 将当前 today 数据归档到 history（跨天时自动调用）。
+ * 保留最近 MAX_HISTORY_DAYS 天。
+ */
+export function archiveToday() {
+  var tk = todayKey()
+  return Promise.all([getToday(), getHistory()]).then(function (arr) {
+    var today = arr[0]
+    var history = arr[1]
+    // 查找是否已有今天的数据
+    var found = false
+    for (var i = 0; i < history.length; i++) {
+      if (history[i].dateKey === tk) {
+        history[i].totalMl = today.totalMl
+        history[i].entries = today.entries
+        found = true
+        break
+      }
+    }
+    if (!found && today.totalMl > 0) {
+      history.unshift({ dateKey: tk, totalMl: today.totalMl, entries: today.entries })
+    }
+    // 限制最多30天
+    var trimmed = history.slice(0, MAX_HISTORY_DAYS)
+    // 转为存储格式 { "yyyy-MM-dd": {...} }
+    var obj = {}
+    for (var j = 0; j < trimmed.length; j++) {
+      obj[trimmed[j].dateKey] = { totalMl: trimmed[j].totalMl, entries: trimmed[j].entries }
+    }
+    return setItem(HISTORY_KEY, JSON.stringify(obj))
+  })
+}
+
+/**
+ * 导出饮水数据为文本格式。
+ * @returns {Promise<string>}
+ */
+export function exportData() {
+  return getHistory().then(function (history) {
+    if (!history.length) return '暂无饮水记录'
+    var lines = ['日期,总量(ml),次数']
+    for (var i = 0; i < history.length; i++) {
+      var d = history[i]
+      lines.push(d.dateKey + ',' + d.totalMl + ',' + d.entries.length)
+    }
+    return lines.join('\n')
+  })
 }
 
 /* ---------- 内部工具（避免对外暴露） ---------- */

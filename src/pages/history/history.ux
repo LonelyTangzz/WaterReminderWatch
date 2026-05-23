@@ -1,10 +1,16 @@
 <!--
-  历史页：饮水记录列表（最新在上，可滚动）。
-  无数据时显示空状态，避开相邻if渲染坑。
+  历史页：按日期查看饮水记录 + 导出数据。
 -->
 <template>
   <div class="page">
-    <text class="head-total">{{ tToday }} {{ totalMl }} ml</text>
+    <!-- 日期导航 -->
+    <div class="nav-date">
+      <text class="nav-arrow" onclick="prevDay">◀</text>
+      <text class="nav-label">{{ dateLabel }}</text>
+      <text class="nav-arrow" onclick="nextDay">▶</text>
+    </div>
+
+    <text class="head-total">{{ dateLabel }} {{ totalMl }} ml</text>
     <text class="head-sub">{{ tTimes }} {{ count }} </text>
 
     <text class="empty">{{ count === 0 ? tNoRecord : '' }}</text>
@@ -16,7 +22,10 @@
       </div>
     </div>
 
-    <text class="b" onclick="goBack">{{ tBack }}</text>
+    <div class="foot-row">
+      <text class="b" onclick="doExport">导出</text>
+      <text class="b" onclick="goBack">{{ tBack }}</text>
+    </div>
   </div>
 </template>
 
@@ -27,32 +36,60 @@
   width: 480px;
   height: 480px;
   background-color: #000000;
-  padding-top: 24px;
+  padding-top: 16px;
 }
-.head-total { font-size: 34px; color: #4FC3F7; font-weight: bold; }
-.head-sub { font-size: 20px; color: #888888; margin-top: 2px; margin-bottom: 8px; }
-.empty { font-size: 22px; color: #555555; margin-top: 40px; }
+.nav-date {
+  flex-direction: row;
+  align-items: center;
+  justify-content: center;
+  margin-bottom: 6px;
+}
+.nav-arrow {
+  font-size: 28px;
+  color: #4FC3F7;
+  padding: 6px 14px;
+}
+.nav-label {
+  font-size: 22px;
+  color: #888888;
+  min-width: 130px;
+  text-align: center;
+}
+.head-total { font-size: 30px; color: #4FC3F7; font-weight: bold; }
+.head-sub { font-size: 18px; color: #888888; margin-top: 2px; margin-bottom: 4px; }
+.empty { font-size: 20px; color: #555555; margin-top: 30px; }
 .list-area {
   flex-direction: column;
   align-items: center;
   width: 400px;
-  height: 280px;
+  height: 240px;
 }
 .entry {
   flex-direction: row;
   align-items: center;
   justify-content: center;
-  margin-top: 3px;
-  margin-bottom: 3px;
+  margin-top: 2px;
+  margin-bottom: 2px;
 }
-.entry-time { font-size: 24px; color: #CCCCCC; width: 120px; text-align: center; }
-.entry-ml { font-size: 24px; color: #4FC3F7; width: 120px; text-align: center; }
-.b { font-size: 24px; color: #81D4FA; margin-top: 8px; padding-top: 6px; padding-bottom: 6px; padding-left: 18px; padding-right: 18px; }
+.entry-time { font-size: 22px; color: #CCCCCC; width: 120px; text-align: center; }
+.entry-ml { font-size: 22px; color: #4FC3F7; width: 120px; text-align: center; }
+.foot-row {
+  flex-direction: row;
+  align-items: center;
+  justify-content: center;
+  margin-top: 4px;
+}
+.b {
+  font-size: 22px; color: #81D4FA;
+  padding-top: 6px; padding-bottom: 6px;
+  padding-left: 16px; padding-right: 16px;
+}
 </style>
 
 <script>
 import router from '@system.router'
-import { getToday } from '../../common/util/store.js'
+import prompt from '@system.prompt'
+import { getToday, getHistory, exportData } from '../../common/util/store.js'
 import { t } from '../../common/util/i18n.js'
 
 export default {
@@ -60,27 +97,75 @@ export default {
     totalMl: 0,
     count: 0,
     rows: [],
-    tToday: '今日',
+    dateLabel: '今日',
     tTimes: '次',
     tNoRecord: '今天还没有记录',
     tBack: '返回'
   },
+  _history: [],
+  _currentIdx: -1,
 
   onShow() {
+    this._loadAll()
+  },
+
+  /** 加载历史 + 今天数据。 */
+  _loadAll() {
     var self = this
-    getToday().then((today) => {
-      self.totalMl = today.totalMl
-      var entries = today.entries || []
-      self.count = entries.length
-      var rows = []
-      for (var i = entries.length - 1; i >= 0 && rows.length < 20; i--) {
-        rows.push({ time: formatTime(entries[i].t), ml: entries[i].ml })
+    Promise.all([getToday(), getHistory()]).then(function (arr) {
+      var today = arr[0]
+      self._history = []
+      // 今天排第一
+      self._history.push({ dateKey: today.dateKey, totalMl: today.totalMl, entries: today.entries || [] })
+      // 历史排在后面
+      var hist = arr[1]
+      for (var i = 0; i < hist.length; i++) {
+        if (hist[i].dateKey !== today.dateKey) {
+          self._history.push(hist[i])
+        }
       }
-      self.rows = rows
-      self.tToday = t('today')
+      self._currentIdx = 0
+      self._renderDay()
       self.tTimes = t('times')
       self.tNoRecord = t('noRecord')
       self.tBack = t('back')
+    })
+  },
+
+  _renderDay() {
+    var day = this._history[this._currentIdx]
+    if (!day) return
+    this.totalMl = day.totalMl
+    this.count = (day.entries || []).length
+    this.dateLabel = this._currentIdx === 0 ? t('today') : day.dateKey
+
+    var entries = day.entries || []
+    var rows = []
+    for (var i = entries.length - 1; i >= 0 && rows.length < 20; i--) {
+      rows.push({ time: formatTime(entries[i].t), ml: entries[i].ml })
+    }
+    this.rows = rows
+  },
+
+  prevDay() {
+    if (this._currentIdx < this._history.length - 1) {
+      this._currentIdx++
+      this._renderDay()
+    }
+  },
+
+  nextDay() {
+    if (this._currentIdx > 0) {
+      this._currentIdx--
+      this._renderDay()
+    }
+  },
+
+  doExport() {
+    exportData().then(function (csv) {
+      prompt.showToast({ message: csv.substring(0, 80) + '...', duration: 0 })
+    }).catch(function () {
+      prompt.showToast({ message: '导出失败', duration: 0 })
     })
   },
 
