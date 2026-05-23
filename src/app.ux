@@ -2,180 +2,131 @@
 /**
  * 应用入口 — 后台保活 + 提醒调度中心。
  *
- * === 保活策略 v2（2026-05-23） ===
+ * === 保活策略 v3（2026-05-23） ===
  *
- * 核心发现：退后台后 Logo 常驻 → 系统确实接受了后台声明，但 setInterval
- * 这类 JS 定时器被冻结。网络 I/O 回调是系统级事件，可能仍能触发。
+ * 核心发现：退后台后 Logo 常驻 → 系统接受后台声明，但 JS 定时器冻结。
+ * v3 方案：fetch 回调自循环 + 每次心跳实时读存储（不依赖跨组件通信）。
  *
- * v2 方案：**弃用 setInterval，改用 fetch 回调自循环**。
- *   1. 发起 fetch(delay/10)，服务器端延迟 10 秒响应
- *   2. 请求进行中 → system.request "正在使用" → 保活
- *   3. 响应到达 → 回调触发 → 检查提醒 → 立即发起下一次 fetch
- *   4. 如此形成"网络回调驱动"的无限循环，不依赖 JS 定时器
+ * 流程：
+ *   1. fetch(delay/10) → 成功/失败回调
+ *   2. 回调中实时读取 storage 里的 settings
+ *   3. 若提醒关闭 → 立即 _stopLoop（无新 fetch → system.request 停 → Logo 消）
+ *   4. 若提醒开启 + 到间隔 + 非睡眠 → 震动 + toast
+ *   5. 继续 _scheduleNext → 循环
  *
- * 若手表无网络，fetch 快速失败，fail 回调同样触发下一次 fetch，
- * 形成快速重试循环。虽然失败时保活窗口短，但至少回调链不断。
+ * 优点：设置页改任何参数，下一次心跳（≤10s）自动生效，无需 $app 通信。
  */
 import fetch from '@system.fetch'
 import { getSettings } from './common/util/store.js'
 import { isQuietTime, fireReminder } from './common/util/reminder.js'
 
-/**
- * 后台心跳间隔（秒）。
- * 测试用 10s，正式版可调回 30s。
- * 注意：这是传递给 httpbin.org/delay/ 的参数，服务器端会等这么久才响应。
- * 意味着每次 fetch 的"进行中"窗口 = 这个秒数，也是连续两次提醒检查的最大间隔。
- */
+/** 心跳间隔（秒）。服务器端延迟 = 保活窗口。 */
 var HEARTBEAT_SEC = 10
 
 export default {
   onCreate() {
-    console.log('[app] created, starting callback-driven loop')
+    console.log('[app] created')
     var self = this
     self._lastReminderTime = 0
     self._loopRunning = false
     self._loopTimer = null
 
-    // 读取设置后启动回调循环
+    // 首次启动：读设置 → 按需启动循环
+    self._refreshAndStart()
+  },
+
+  /** 读取最新设置并决定启动/停止循环。 */
+  _refreshAndStart() {
+    var self = this
     getSettings().then(function (settings) {
-      self._settings = settings
-      console.log('[app] settings loaded, goal=' + settings.goalMl +
-        ', interval=' + settings.intervalMinutes +
-        ', reminder=' + settings.reminderEnabled)
-      self._startLoop()
+      console.log('[app] settings loaded, enabled=' + settings.reminderEnabled)
+      if (settings.reminderEnabled) {
+        self._startLoop()
+      } else {
+        self._stopLoop()
+      }
     }).catch(function (err) {
-      console.warn('[app] settings load fail, using defaults', err)
-      self._settings = { goalMl: 2000, intervalMinutes: 60, reminderEnabled: true }
-      self._startLoop()
+      console.warn('[app] settings load fail', err)
+      self._startLoop() // 读不到也启动，默认行为
     })
   },
 
-  /**
-   * 启动/重启回调驱动循环。
-   * 如果提醒已关闭，则不启动（不消耗网络、不展示 Logo）。
-   */
+  /** 启动回调链循环。 */
   _startLoop() {
     var self = this
-    var enabled = self._settings && self._settings.reminderEnabled
-
-    // 停掉旧循环
-    self._stopLoop()
-
-    if (!enabled) {
-      console.log('[app] reminder disabled, loop not started')
-      return
-    }
-
+    self._stopLoop() // 先清理旧的
     self._loopRunning = true
 
-    // 兜底定时器：前台时加速检查，网络不通也不至于完全停摆
+    // 兜底定时器
     self._loopTimer = setInterval(function () {
-      if (self._loopRunning && self._settings && self._settings.reminderEnabled) {
-        self._checkReminder()
-      }
+      if (self._loopRunning) self._checkAndMaybeStop()
     }, HEARTBEAT_SEC * 1000)
 
-    // 启动回调链
+    // 启动 fetch 回调链
     self._scheduleNext()
-    console.log('[app] callback loop started, heartbeat=' + HEARTBEAT_SEC + 's')
+    console.log('[app] loop started')
   },
 
-  /**
-   * 停止回调循环。关闭提醒或 onDestroy 时调用。
-   * 循环停止 → system.request 不再活跃 → 表盘 Logo 消失。
-   */
+  /** 停止循环 → system.request 不再活跃 → Logo 消失。 */
   _stopLoop() {
     this._loopRunning = false
     if (this._loopTimer) {
       clearInterval(this._loopTimer)
       this._loopTimer = null
     }
-    console.log('[app] callback loop stopped')
+    console.log('[app] loop stopped')
   },
 
-  /**
-   * 发起一次心跳 fetch，完成后在回调中检查提醒 + 调度下一次。
-   * 核心：不依赖 setInterval，完全由网络回调链驱动。
-   * 如果提醒已关闭，不再调度下一次 → 循环自然终止。
-   */
+  /** 发起一次心跳 fetch。回调中检查提醒 + 决定是否继续。 */
   _scheduleNext() {
     var self = this
     if (!self._loopRunning) return
-    // 双重检查：提醒关闭时终止循环
-    if (!self._settings || !self._settings.reminderEnabled) {
-      self._stopLoop()
-      return
-    }
 
     fetch.fetch({
       url: 'http://httpbin.org/delay/' + HEARTBEAT_SEC,
       method: 'GET',
       responseType: 'text',
       success: function () {
-        self._checkReminder()
-        // 检查后重新判断：提醒可能已被关闭
-        if (self._loopRunning && self._settings && self._settings.reminderEnabled) {
-          self._scheduleNext()
-        } else {
-          self._stopLoop()
-        }
+        self._checkAndMaybeStop()
+        if (self._loopRunning) self._scheduleNext()
       },
       fail: function () {
-        self._checkReminder()
-        if (self._loopRunning && self._settings && self._settings.reminderEnabled) {
-          setTimeout(function () {
-            self._scheduleNext()
-          }, 2000)
-        } else {
-          self._stopLoop()
+        self._checkAndMaybeStop()
+        if (self._loopRunning) {
+          setTimeout(function () { self._scheduleNext() }, 2000)
         }
       }
     })
   },
 
   /**
-   * 提醒检查。
+   * 核心：实时读存储 → 检查提醒 → 提醒关闭则停循环。
+   * 每次心跳都重新读 storage，设置页改参数后 ≤10s 自动生效。
    */
-  _checkReminder() {
+  _checkAndMaybeStop() {
     var self = this
-    var s = self._settings
-    if (!s || !s.reminderEnabled) {
-      self._stopLoop()
-      return
-    }
+    getSettings().then(function (s) {
+      // 提醒关闭 → 停循环 → Logo 消失
+      if (!s.reminderEnabled) {
+        console.log('[app] reminder disabled in storage, stopping loop')
+        self._stopLoop()
+        return
+      }
 
-    // 睡眠免打扰：22:00–08:00 静默
-    if (isQuietTime()) {
-      return
-    }
+      // 睡眠免打扰
+      if (isQuietTime()) return
 
-    var now = Date.now()
-    var intervalMs = (s.intervalMinutes || 60) * 60 * 1000
-    if (now - self._lastReminderTime >= intervalMs) {
-      self._lastReminderTime = now
-      console.log('[app] firing reminder at ' + new Date().toLocaleTimeString())
-      fireReminder()
-    }
-  },
-
-  /**
-   * 外部可调用：设置变更后同步。
-   * 提醒开关变化时自动启动/停止后台循环。
-   */
-  syncSettings(settings) {
-    var wasEnabled = this._settings && this._settings.reminderEnabled
-    this._settings = settings
-    var isEnabled = settings && settings.reminderEnabled
-    console.log('[app] settings synced, reminder=' + isEnabled)
-
-    if (isEnabled && !wasEnabled) {
-      // 从关闭→开启：启动循环
-      this._startLoop()
-    } else if (!isEnabled && wasEnabled) {
-      // 从开启→关闭：停止循环（Logo 消失）
-      this._stopLoop()
-    }
-    // 开关没变 → 不重启，避免打断进行中的 fetch
+      // 间隔检查
+      var now = Date.now()
+      var intervalMs = (s.intervalMinutes || 60) * 60 * 1000
+      if (now - self._lastReminderTime >= intervalMs) {
+        self._lastReminderTime = now
+        console.log('[app] firing reminder at ' + new Date().toLocaleTimeString())
+        fireReminder()
+      }
+    }).catch(function () {
+      // 读失败不处理，等下次心跳重试
+    })
   },
 
   onDestroy() {

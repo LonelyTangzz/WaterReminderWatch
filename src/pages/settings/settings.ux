@@ -101,10 +101,7 @@ export default {
       self.goalMl = saved.goalMl
       self.intervalMinutes = saved.intervalMinutes
       self.reminderEnabled = saved.reminderEnabled
-      // 同步到 app.ux，让后台心跳循环立即感知设置变更
-      if (self.$app && typeof self.$app.syncSettings === 'function') {
-        self.$app.syncSettings(saved)
-      }
+      // app.ux 每次心跳实时读 storage，无需手动推送
     })
   },
 
