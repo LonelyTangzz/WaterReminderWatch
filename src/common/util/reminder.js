@@ -103,6 +103,9 @@ export function maybeFireReminder() {
 /**
  * 触发一次提醒：连震 3 下 + 随机花样 toast。
  * 手动调用无视睡眠时段。
+ *
+ * 注意：S4 不支持 system.notification（会导致应用无法加载），
+ * 因此仅用 toast + 震动组合。未读信息通知属平台限制，无法实现。
  */
 export function fireReminder() {
   vibrateTimes(3)
