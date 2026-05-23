@@ -60,19 +60,12 @@ export default {
   _loadHistory(today) {
     var self = this
     self._readHistory().then(function (hist) {
-      // 归档今天
-      var tk = today.dateKey
-      var found = -1
-      for (var i = 0; i < hist.length; i++) { if (hist[i].dateKey === tk) { found = i; break } }
-      if (found >= 0) { hist[found] = { dateKey: tk, totalMl: today.totalMl, entries: today.entries || [] } }
-      else if (today.totalMl > 0) { hist.unshift({ dateKey: tk, totalMl: today.totalMl, entries: today.entries || [] }) }
-      if (hist.length > 30) hist = hist.slice(0, 30)
-      // 写回存储
-      var obj = {}
-      for (var j = 0; j < hist.length; j++) { obj[hist[j].dateKey] = { totalMl: hist[j].totalMl, entries: hist[j].entries } }
-      self._writeHistory(obj)
-      // 显示
-      self._history = hist
+      // 合并今天+历史
+      var all = [{ dateKey: today.dateKey, totalMl: today.totalMl, entries: today.entries || [] }]
+      for (var i = 0; i < hist.length; i++) {
+        if (hist[i].dateKey !== today.dateKey) all.push(hist[i])
+      }
+      self._history = all
       self._idx = 0
       self._showDay()
     })
@@ -84,9 +77,10 @@ export default {
     }).then(function (raw) {
       if (!raw) return []
       try {
-        var obj = JSON.parse(raw), days = []
+        var obj = JSON.parse(raw)
+        var days = []
         for (var k in obj) {
-          if (Object.prototype.hasOwnProperty.call(obj, k)) {
+          if (Object.prototype.hasOwnProperty.call(obj, k) && obj[k]) {
             days.push({ dateKey: k, totalMl: obj[k].totalMl || 0, entries: obj[k].entries || [] })
           }
         }
@@ -105,11 +99,7 @@ export default {
     if (!d) return
     this.totalMl = d.totalMl
     this.count = (d.entries || []).length
-    this.dateLabel = this._idx === 0 ? t('today') : d.dateKey
-    // 有历史时显示 "今日 1/5"
-    if (this._history.length > 1) {
-      this.dateLabel = this.dateLabel + ' ' + (this._idx + 1) + '/' + this._history.length
-    }
+    this.dateLabel = d.dateKey === this._history[0].dateKey ? t('today') : d.dateKey
     var rows = [], entries = d.entries || []
     for (var i = entries.length - 1; i >= 0 && rows.length < 8; i--) {
       rows.push({ time: formatTime(entries[i].t), ml: entries[i].ml })

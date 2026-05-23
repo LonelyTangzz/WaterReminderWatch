@@ -125,8 +125,11 @@
  */
 import router from '@system.router'
 import prompt from '@system.prompt'
+import storage from '@system.storage'
 import { getSettings, getToday, addIntake } from '../../common/util/store.js'
 import { t } from '../../common/util/i18n.js'
+
+var HISTORY_KEY = 'wr_history_v1'
 
 export default {
   private: {
@@ -169,17 +172,35 @@ export default {
 
   _add(ml) {
     var self = this
-    addIntake(ml).then(() => {
+    addIntake(ml).then(function () {
       self.refresh()
       prompt.showToast({ message: '+' + ml + ' ml', duration: 0 })
-      try {
-        if (self.$app && typeof self.$app.resetReminderTimer === 'function') {
-          self.$app.resetReminderTimer()
-        }
-      } catch (e) {}
-    }).catch((err) => {
-      console.error('[index] addIntake fail', err)
+      try { if (self.$app && self.$app.resetReminderTimer) self.$app.resetReminderTimer() } catch (e) {}
+      // 归档到历史
+      self._archiveToHistory(ml)
+    }).catch(function () {
       prompt.showToast({ message: '保存失败', duration: 0 })
+    })
+  },
+
+  _archiveToHistory() {
+    getToday().then(function (today) {
+      var tk = today.dateKey
+      storage.get({
+        key: HISTORY_KEY,
+        success: function (raw) {
+          var hist = []
+          try { if (raw) hist = JSON.parse(raw) } catch (e) {}
+          if (Array.isArray(hist)) {
+            var obj = {}
+            for (var i = 0; i < hist.length; i++) { if (hist[i] && hist[i].dateKey) obj[hist[i].dateKey] = hist[i] }
+            hist = obj
+          }
+          hist[tk] = { totalMl: today.totalMl, entries: today.entries || [] }
+          storage.set({ key: HISTORY_KEY, value: JSON.stringify(hist), success: function () {}, fail: function () {} })
+        },
+        fail: function () {}
+      })
     })
   },
 
