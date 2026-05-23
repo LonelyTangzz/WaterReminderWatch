@@ -1,5 +1,15 @@
 # CHANGELOG
 
+## 2026-05-23（晚间） — 正式版参数 + 进度条 + 自定义杯量
+
+- [feat] **[src/pages/index/index.ux](src/pages/index/index.ux)** 新增进度条可视化（蓝色填充条 `<div>`，`style="width:{{percent}}%"`）
+- [feat] **[src/pages/index/index.ux](src/pages/index/index.ux)** 杯量从固定 150/250/500 改为动态读取 `settings.cup1Ml/cup2Ml/cup3Ml`
+- [feat] **[src/pages/settings/settings.ux](src/pages/settings/settings.ux)** 新增小杯/中杯/大杯自定义行（50–1000，步进 50）
+- [feat] **[src/common/util/store.js](src/common/util/store.js)** `DEFAULT_SETTINGS` / `setSettings` / `mergeSettings` 支持 `cup1Ml`/`cup2Ml`/`cup3Ml`
+- [chore] `BG_INTERVAL_MS` 10s→**30s**（正式版心跳）
+- [chore] 提醒间隔下限 `clamp(…,1,240)` → `clamp(…,15,240)`（正式版下限）
+- [chore] 设置页间隔步进 `max(1,…)` → `max(15,…)`
+
 ## 2026-05-23 — 后台保活突破 + 全功能完善（最终版）
 
 ### 🎉 核心突破：fetch 回调链后台保活
