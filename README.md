@@ -101,7 +101,7 @@ cp "dist/com.waterreminder.watch.release.1.0.0.rpk" "dist/喝水提醒.bin"
 | `system.prompt` | toast 提示 | ✅ |
 | `system.vibrator` | 震动提醒（**仅 `vibrate({mode})`，无 `start`**） | ✅ |
 | `system.alarm` | 系统闹钟（后台提醒） | ❌ 空壳模块，`setAlarm` 不存在 |
-| `system.audio` 后台保活 | 静音音频常驻 | ❌ 后台仍被冻结 |
+| `system.audio` 后台保活 | 静音音频常驻 | ❌ 后台仍被冻结（已废弃，不再声明） |
 
 ---
 

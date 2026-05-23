@@ -1,5 +1,24 @@
 # CHANGELOG
 
+## 2026-05-23 — 前台提醒接入 + 清理无效后台代码 + TODO 完善
+
+**核心修复：前台提醒从未被启动（功能缺陷）**
+
+- [fix] **[src/pages/index/index.ux](src/pages/index/index.ux)**：`onShow` 现在会读取 settings 并按设置间隔启动前台提醒定时器（`startForeground` + `maybeFireReminder`）；`onHide` 停止定时器。此前 `onShow` 只刷新 UI，提醒功能完全没有接入——这是导致用户"开了提醒但从不震动"的根因
+- [fix] 主页增加 `_startReminderIfEnabled()` 方法，统一管理定时器启停，从设置页返回后自动同步最新间隔/开关
+
+**代码清理：移除无效后台保活链路**
+
+- [chore] **[src/app.ux](src/app.ux)**：移除 30s 测试定时器 + `startKeepAlive`/`stopKeepAlive` 调用。后台保活已在 2026-05-22 实测证明无效（S4 Vela 平台硬限制），保留只会误导后续维护。现精简为纯生命周期日志
+- [chore] **[src/common/util/reminder.js](src/common/util/reminder.js)**：移除 `startKeepAlive()` / `stopKeepAlive()` 函数及 `@system.audio` 导入。这两个函数仅在 app.ux 的无效后台链路中被调用
+- [chore] **[src/manifest.json](src/manifest.json)**：移除 `system.audio` feature 声明及 `config.background.features` 配置（后台音频保活已废弃，无需再声明该权限）
+
+**文档完善**
+
+- [docs] **[TODO.md](TODO.md)** 重写：从 3 条简单规范扩展为结构化的需求列表，含待开发功能（优先级排序）、已知限制、技术债务
+- [docs] [src/pages/index/index.ux](src/pages/index/index.ux) 补充提醒策略说明注释
+- [docs] [src/app.ux](src/app.ux) 补充平台限制引用注释
+
 ## 2026-05-22 — 完整前台版 + 迁回主目录 + 清理旧链路
 
 **完整前台版（三页）落地，用户实机验收满意：**
