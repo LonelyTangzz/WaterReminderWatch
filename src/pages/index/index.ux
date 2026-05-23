@@ -1,49 +1,131 @@
-<!-- 喝水提醒主页（Xiaomi Watch S4 圆表） -->
+<!--
+  喝水提醒主页（Xiaomi Watch S4 圆表，466 圆屏，designWidth 480）。
+  - 顶部：当前饮水量 / 目标 / 百分比
+  - 进度条：可视化完成度
+  - 中部：三档快捷加水（可在设置页自定义水量）
+  - 底部：历史 · 设置 导航
+-->
 <template>
   <div class="page">
     <div class="hero">
       <text class="amount">{{ totalMl }}</text>
-      <text class="unit">/ {{ goalMl }}ml {{ percent }}%</text>
+      <text class="unit">/ {{ goalMl }}ml · {{ percent }}%</text>
+      <!-- 进度条 -->
       <div class="progress-bar">
         <div class="progress-fill" style="width:{{ percent }}%"></div>
       </div>
     </div>
+
     <div class="cup-row">
       <div class="cup cup-s" onclick="addSmall"><text class="cup-label">{{ cup1 }}</text></div>
       <div class="cup cup-m" onclick="addMedium"><text class="cup-label">{{ cup2 }}</text></div>
       <div class="cup cup-l" onclick="addLarge"><text class="cup-label">{{ cup3 }}</text></div>
     </div>
+
     <div class="nav-row">
-      <text class="nav-link" onclick="openHistory">{{ tHistory }}</text>
-      <text class="nav-dot">.</text>
-      <text class="nav-link" onclick="openSettings">{{ tSettings }}</text>
+      <text class="nav-link" onclick="openHistory">历史</text>
+      <text class="nav-dot">·</text>
+      <text class="nav-link" onclick="openSettings">设置</text>
     </div>
   </div>
 </template>
 
 <style>
-.page { flex-direction: column; align-items: center; justify-content: center; width: 480px; height: 480px; background-color: #000000; }
-.hero { flex-direction: column; align-items: center; margin-bottom: 22px; }
-.amount { font-size: 100px; color: #4FC3F7; font-weight: bold; }
-.unit { font-size: 27px; color: #AAAAAA; margin-top: 4px; }
-.progress-bar { width: 260px; height: 8px; background-color: #1A1A1A; border-radius: 4px; margin-top: 14px; }
-.progress-fill { height: 8px; background-color: #4FC3F7; border-radius: 4px; }
-.cup-row { flex-direction: row; justify-content: center; margin-top: 6px; }
-.cup { width: 104px; height: 76px; margin-left: 7px; margin-right: 7px; border-radius: 38px; justify-content: center; align-items: center; }
+.page {
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  width: 480px;
+  height: 480px;
+  background-color: #000000;
+}
+
+.hero {
+  flex-direction: column;
+  align-items: center;
+  margin-bottom: 20px;
+}
+
+.amount {
+  font-size: 96px;
+  color: #4FC3F7;
+  font-weight: bold;
+}
+
+.unit {
+  font-size: 28px;
+  color: #AAAAAA;
+  margin-top: 2px;
+}
+
+.progress-bar {
+  width: 260px;
+  height: 8px;
+  background-color: #1A1A1A;
+  border-radius: 4px;
+  margin-top: 12px;
+}
+
+.progress-fill {
+  height: 8px;
+  background-color: #4FC3F7;
+  border-radius: 4px;
+}
+
+.cup-row {
+  flex-direction: row;
+  justify-content: center;
+  margin-top: 10px;
+}
+
+.cup {
+  width: 100px;
+  height: 72px;
+  margin-left: 6px;
+  margin-right: 6px;
+  border-radius: 36px;
+  justify-content: center;
+  align-items: center;
+}
+
 .cup-s { background-color: #4FC3F7; }
 .cup-m { background-color: #0288D1; }
 .cup-l { background-color: #01579B; }
-.cup-label { color: #FFFFFF; font-size: 32px; font-weight: bold; }
-.nav-row { flex-direction: row; align-items: center; margin-top: 26px; }
-.nav-link { color: #81D4FA; font-size: 28px; padding-left: 20px; padding-right: 20px; }
-.nav-dot { color: #555555; font-size: 28px; }
+
+.cup-label {
+  color: #FFFFFF;
+  font-size: 30px;
+  font-weight: bold;
+}
+
+.nav-row {
+  flex-direction: row;
+  align-items: center;
+  margin-top: 24px;
+}
+
+.nav-link {
+  color: #81D4FA;
+  font-size: 28px;
+  padding-left: 18px;
+  padding-right: 18px;
+}
+
+.nav-dot {
+  color: #555555;
+  font-size: 28px;
+}
 </style>
 
 <script>
+/**
+ * 主页脚本。
+ * 数据来自 store.js（settings + today）。
+ * 提醒由 app.ux 统一管理。
+ */
 import router from '@system.router'
 import prompt from '@system.prompt'
 import { getSettings, getToday, addIntake } from '../../common/util/store.js'
-import { t } from '../../common/util/i18n.js'
 
 export default {
   private: {
@@ -52,25 +134,27 @@ export default {
     percent: 0,
     cup1: 150,
     cup2: 250,
-    cup3: 500,
-    tHistory: '',
-    tSettings: ''
+    cup3: 500
   },
 
-  onShow() { this.refresh() },
+  onShow() {
+    this.refresh()
+  },
 
   refresh() {
     var self = this
-    return Promise.all([getSettings(), getToday()]).then(function (arr) {
-      var s = arr[0], d = arr[1]
-      self.goalMl = s.goalMl
-      self.totalMl = d.totalMl
-      self.percent = self.goalMl > 0 ? Math.min(100, Math.round(100 * self.totalMl / self.goalMl)) : 0
-      self.cup1 = s.cup1Ml || 150
-      self.cup2 = s.cup2Ml || 250
-      self.cup3 = s.cup3Ml || 500
-      self.tHistory = t('history')
-      self.tSettings = t('settings')
+    return Promise.all([getSettings(), getToday()]).then((arr) => {
+      var settings = arr[0]
+      var today = arr[1]
+      self.goalMl = settings.goalMl
+      self.totalMl = today.totalMl
+      self.percent = self.goalMl > 0
+        ? Math.min(100, Math.round(100 * self.totalMl / self.goalMl))
+        : 0
+      // 读取自定义杯量（缺省用默认值）
+      self.cup1 = settings.cup1Ml || 150
+      self.cup2 = settings.cup2Ml || 250
+      self.cup3 = settings.cup3Ml || 500
     })
   },
 
@@ -80,12 +164,17 @@ export default {
 
   _add(ml) {
     var self = this
-    addIntake(ml).then(function () {
+    addIntake(ml).then(() => {
       self.refresh()
       prompt.showToast({ message: '+' + ml + ' ml', duration: 0 })
-      try { if (self.$app && self.$app.resetReminderTimer) self.$app.resetReminderTimer() } catch (e) {}
-    }).catch(function () {
-      prompt.showToast({ message: t('saveFail'), duration: 0 })
+      try {
+        if (self.$app && typeof self.$app.resetReminderTimer === 'function') {
+          self.$app.resetReminderTimer()
+        }
+      } catch (e) {}
+    }).catch((err) => {
+      console.error('[index] addIntake fail', err)
+      prompt.showToast({ message: '保存失败', duration: 0 })
     })
   },
 

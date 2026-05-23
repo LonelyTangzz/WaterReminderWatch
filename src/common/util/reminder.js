@@ -101,12 +101,14 @@ export function maybeFireReminder() {
 }
 
 /**
- * 触发一次提醒：独特震动模式 + 随机花样 toast。
+ * 触发一次提醒：连震 3 下 + 随机花样 toast。
+ * 手动调用无视睡眠时段。
  *
- * 震动模式：短-短-短 短暂停 短-短-短（共6下，两组三联短震）
- * 与普通消息通知（通常单下长震或3下）明显不同，容易辨识。
+ * 注意：S4 不支持 system.notification（会导致应用无法加载），
+ * 因此仅用 toast + 震动组合。未读信息通知属平台限制，无法实现。
  */
 export function fireReminder() {
+  // 独特震动：两组三联短震
   vibratePattern()
   var msg = pickReminderMessage()
   try {
@@ -116,38 +118,20 @@ export function fireReminder() {
   }
 }
 
-/**
- * 独特震动模式：两组三联短震，间隔约400ms。
- * 与其他通知（单震/三连震）明显区分。
- */
+/** 两组三联短震(sh-sh-sh p sh-sh-sh)，与普通通知区分。 */
 export function vibratePattern() {
-  // 第一组：3 下短震，间隔 200ms
-  vibrateOnce('short')
-  setTimeout(function () { vibrateOnce('short') }, 200)
-  setTimeout(function () { vibrateOnce('short') }, 400)
-  // 第二组：3 下短震，间隔 200ms，与第一组间隔 500ms
-  setTimeout(function () { vibrateOnce('short') }, 900)
-  setTimeout(function () { vibrateOnce('short') }, 1100)
-  setTimeout(function () { vibrateOnce('short') }, 1300)
-}
-
-/**
- * 震动一次，可指定模式。
- * @param {string} [mode='long'] 'short' 或 'long'
- */
-function vibrateOnce(mode) {
-  try {
-    if (vibrator && typeof vibrator.vibrate === 'function') {
-      vibrator.vibrate({ mode: mode || 'long' })
-    }
-  } catch (e) {
-    console.warn('[reminder] vibrate error', e)
+  var v = function (mode) {
+    try { if (vibrator && vibrator.vibrate) vibrator.vibrate({ mode: mode || 'long' }) } catch (e) {}
   }
+  v('short')
+  setTimeout(function () { v('short') }, 200)
+  setTimeout(function () { v('short') }, 400)
+  setTimeout(function () { v('short') }, 900)
+  setTimeout(function () { v('short') }, 1100)
+  setTimeout(function () { v('short') }, 1300)
 }
 
 /**
- * 震动一次（兼容旧接口）。Watch S4 只支持 `vibrator.vibrate({mode})`。
- */
  * 震动一次。Watch S4 只支持 `vibrator.vibrate({mode})`，mode='long' 长震。
  */
 export function vibrate() {

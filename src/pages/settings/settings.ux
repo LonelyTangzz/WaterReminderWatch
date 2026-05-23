@@ -3,53 +3,53 @@
 -->
 <template>
   <div class="page">
-    <text class="title">{{ tTitle }}</text>
+    <text class="title">设置</text>
 
     <div class="row">
-      <text class="label">{{ tGoal }}</text>
+      <text class="label">目标</text>
       <text class="step-btn" onclick="goalDown">−</text>
       <text class="step-val">{{ goalMl }}</text>
       <text class="step-btn" onclick="goalUp">+</text>
     </div>
 
     <div class="row">
-      <text class="label">{{ tInterval }}</text>
+      <text class="label">间隔</text>
       <text class="step-btn" onclick="intvDown">−</text>
       <text class="step-val">{{ intervalMinutes }}m</text>
       <text class="step-btn" onclick="intvUp">+</text>
     </div>
 
     <div class="row">
-      <text class="label">{{ tSmallCup }}</text>
+      <text class="label">小杯</text>
       <text class="step-btn" onclick="cup1Down">−</text>
       <text class="step-val">{{ cup1Ml }}</text>
       <text class="step-btn" onclick="cup1Up">+</text>
     </div>
 
     <div class="row">
-      <text class="label">{{ tMediumCup }}</text>
+      <text class="label">中杯</text>
       <text class="step-btn" onclick="cup2Down">−</text>
       <text class="step-val">{{ cup2Ml }}</text>
       <text class="step-btn" onclick="cup2Up">+</text>
     </div>
 
     <div class="row">
-      <text class="label">{{ tLargeCup }}</text>
+      <text class="label">大杯</text>
       <text class="step-btn" onclick="cup3Down">−</text>
       <text class="step-val">{{ cup3Ml }}</text>
       <text class="step-btn" onclick="cup3Up">+</text>
     </div>
 
     <div class="row">
-      <text class="label">{{ tReminder }}</text>
-      <text class="toggle" onclick="toggleReminder">{{ reminderEnabled ? tReminderOn : tReminderOff }}</text>
+      <text class="label">提醒</text>
+      <text class="toggle" onclick="toggleReminder">{{ reminderEnabled ? '已开启' : '已关闭' }}</text>
     </div>
 
-    <text class="sleep">{{ tQuietHint }}</text>
+    <text class="sleep">睡眠 22:00–08:00 不提醒</text>
 
     <div class="foot">
-      <text class="danger-btn" onclick="clearToday">{{ tClearToday }}</text>
-      <text class="b" onclick="goBack">{{ tBack }}</text>
+      <text class="danger-btn" onclick="clearToday">清空今日</text>
+      <text class="b" onclick="goBack">返回</text>
     </div>
   </div>
 </template>
@@ -95,7 +95,6 @@
 import router from '@system.router'
 import prompt from '@system.prompt'
 import { getSettings, setSettings, resetToday } from '../../common/util/store.js'
-import { t } from '../../common/util/i18n.js'
 
 export default {
   private: {
@@ -104,47 +103,18 @@ export default {
     reminderEnabled: true,
     cup1Ml: 150,
     cup2Ml: 250,
-    cup3Ml: 500,
-    tTitle: '设置',
-    tGoal: '目标',
-    tInterval: '间隔',
-    tSmallCup: '小杯',
-    tMediumCup: '中杯',
-    tLargeCup: '大杯',
-    tReminder: '提醒',
-    tReminderOn: '已开启',
-    tReminderOff: '已关闭',
-    tQuietHint: '睡眠 22:00–08:00 不提醒',
-    tClearToday: '清空今日',
-    tBack: '返回'
+    cup3Ml: 500
   },
 
   onInit() {
-    var self = this
     getSettings().then((s) => {
-      self.goalMl = s.goalMl
-      self.intervalMinutes = s.intervalMinutes
-      self.reminderEnabled = s.reminderEnabled
-      self.cup1Ml = s.cup1Ml || 150
-      self.cup2Ml = s.cup2Ml || 250
-      self.cup3Ml = s.cup3Ml || 500
-      self._refreshI18n()
+      this.goalMl = s.goalMl
+      this.intervalMinutes = s.intervalMinutes
+      this.reminderEnabled = s.reminderEnabled
+      this.cup1Ml = s.cup1Ml || 150
+      this.cup2Ml = s.cup2Ml || 250
+      this.cup3Ml = s.cup3Ml || 500
     })
-  },
-
-  _refreshI18n() {
-    this.tTitle = t('title')
-    this.tGoal = t('goal')
-    this.tInterval = t('interval')
-    this.tSmallCup = t('smallCup')
-    this.tMediumCup = t('mediumCup')
-    this.tLargeCup = t('largeCup')
-    this.tReminder = t('reminder')
-    this.tReminderOn = t('reminderOn')
-    this.tReminderOff = t('reminderOff')
-    this.tQuietHint = t('quietHint')
-    this.tClearToday = t('clearToday')
-    this.tBack = t('back')
   },
 
   save() {
@@ -181,7 +151,7 @@ export default {
     this.reminderEnabled = !this.reminderEnabled
     var self = this
     this.save().then(() => {
-      prompt.showToast({ message: self.reminderEnabled ? t('reminderOn') : t('reminderOff'), duration: 0 })
+      prompt.showToast({ message: self.reminderEnabled ? '提醒已开启' : '提醒已关闭', duration: 0 })
 
       // 尝试替换 Logo（透明/可见）
       self._swapLogo(self.reminderEnabled)
@@ -222,7 +192,7 @@ export default {
 
   clearToday() {
     resetToday().then(() => {
-      prompt.showToast({ message: t('clearDone'), duration: 0 })
+      prompt.showToast({ message: '今日记录已清空', duration: 0 })
     })
   },
 
